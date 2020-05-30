@@ -5,7 +5,6 @@ section Odoo;
 shared Odoo.Contents = (URL as text, Database as text) =>
     let
         connection = Odoo.Login(URL, Database),
-        partners = Table.FromRecords(Odoo.Call(connection, "object", "execute", {"res.partner", "search_read", {}, {"name"}})),
         invoices = 
             Table.FromRecords(Odoo.ExecuteKW(connection, "account.invoice", "search_read", 
                 {{{"state", "=", "paid"}}}, 
@@ -13,9 +12,22 @@ shared Odoo.Contents = (URL as text, Database as text) =>
                     limit = 5,
                     fields={"date_invoice", "partner_id", "display_name", "amount_total_signed", "state"}
                 ]
-            ))
+            )),
+        partners = 
+            Table.FromRecords(Odoo.ExecuteKW(connection, "res.partner", "search_read", 
+                {}, 
+                [
+                    limit = 5,
+                    fields={"id", "display_name"}
+                ]
+            )),
+        table = #table({"Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {
+            { "Invoices", invoices, "Table", "Table", true },
+            { "Partners", partners, "Table", "Table", true }
+        }),
+        navTable = Table.ToNavigationTable(table, {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
-        invoices;
+        navTable;
 
 
 // Data Source Kind description
@@ -32,7 +44,7 @@ Odoo.Publish = [
     Beta = true,
     Category = "Other",
     ButtonText = { Extension.LoadString("ButtonTitle"), Extension.LoadString("ButtonHelp") },
-    LearnMoreUrl = "https://powerbi.microsoft.com/",
+    LearnMoreUrl = "https://github.com/tmijail/Odoo-Power-BI-Connector",
     SourceImage = Odoo.Icons,
     SourceTypeImage = Odoo.Icons
 ];
@@ -113,3 +125,31 @@ JsonRpc.Request = ( url as text, method as text, params as record ) =>
 
 JsonRpc.Call = (url as text, service as text, method as text, args) =>
     JsonRpc.Request(url, "call", [service=service, method=method, args=args]);
+
+
+/************************************************
+ ******************** Common ********************
+ ************************************************/
+
+Table.ToNavigationTable = (
+    table as table,
+    keyColumns as list,
+    nameColumn as text,
+    dataColumn as text,
+    itemKindColumn as text,
+    itemNameColumn as text,
+    isLeafColumn as text
+) as table =>
+    let
+        tableType = Value.Type(table),
+        newTableType = Type.AddTableKey(tableType, keyColumns, true) meta 
+        [
+            NavigationTable.NameColumn = nameColumn, 
+            NavigationTable.DataColumn = dataColumn,
+            NavigationTable.ItemKindColumn = itemKindColumn, 
+            Preview.DelayColumn = itemNameColumn, 
+            NavigationTable.IsLeafColumn = isLeafColumn
+        ],
+        navigationTable = Value.ReplaceType(table, newTableType)
+    in
+        navigationTable;
