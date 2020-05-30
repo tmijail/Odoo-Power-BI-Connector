@@ -4,9 +4,7 @@ section Odoo;
 [DataSource.Kind="Odoo", Publish="Odoo.Publish"]
 shared Odoo.Contents = (URL as text, Database as text) =>
     let
-        /*connection = Odoo.Login(url, db, username, password),*/
-        credential = Extension.CurrentCredential(),
-        connection = Odoo.Login(URL, Database, credential[Username], credential[Password]),
+        connection = Odoo.Login(URL, Database),
         partners = Table.FromRecords(Odoo.Call(connection, "object", "execute", {"res.partner", "search_read", {}, {"name"}})),
         invoices = 
             Table.FromRecords(Odoo.ExecuteKW(connection, "account.invoice", "search_read", 
@@ -23,10 +21,7 @@ shared Odoo.Contents = (URL as text, Database as text) =>
 // Data Source Kind description
 Odoo = [
     Authentication = [
-        // Key = [],
         UsernamePassword = []
-        // Windows = [],
-        //Implicit = []
     ],
     Label = Extension.LoadString("DataSourceLabel")
 ];
@@ -55,10 +50,11 @@ Odoo.Icons = [
 
 
 // Returns user id
-Odoo.Login = (url as text, db as text, username as text, password as text) as record =>
+Odoo.Login = (url as text, db as text) as record =>
     let 
+        credentials = Extension.CurrentCredential(),
         jsonrpc_url = url & "/jsonrpc",
-        uid = JsonRpc.Call(jsonrpc_url, "common", "login", { db, username, password }),
+        uid = JsonRpc.Call(jsonrpc_url, "common", "login", { db, credentials[Username], credentials[Password] }),
         connection = 
             if uid = false then
                 error "Odoo authentication error"
@@ -66,8 +62,7 @@ Odoo.Login = (url as text, db as text, username as text, password as text) as re
                 [
                     url = jsonrpc_url,
                     db = db,
-                    uid = uid,
-                    password = password
+                    uid = uid
                 ]
     in
         connection;
@@ -80,7 +75,7 @@ shared Odoo.Call = (connection as record, service as text, method as text, args 
         {
             connection[db], 
             connection[uid],
-            connection[password]
+            Extension.CurrentCredential()[Password]
         } & args
     );
 
