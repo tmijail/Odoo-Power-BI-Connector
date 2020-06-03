@@ -25,7 +25,9 @@ shared Odoo.Contents = (URL as text, Database as text) =>
             { "Invoices", invoices, "Table", "Table", true },
             { "Partners", partners, "Table", "Table", true }
         }),
-        navTable = Table.ToNavigationTable(table, {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+        models = Odoo.Search(connection, "ir.model", {}, [fields={ "model", "name", "field_id", "info"}]),
+        navTable = Table.ToNavigationTable(table, {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf"),
+        products = Odoo.Search(connection, "product.product", {}, [fields={"display_name"}, context=[active_test=false]])
     in
         navTable;
 
@@ -61,7 +63,7 @@ Odoo.Icons = [
  **********************************************/
 
 
-// Returns user id
+// Finds the uid of the Odoo User and saves all the information needed to connect to the db in the `connection` record.
 Odoo.Login = (url as text, db as text) as record =>
     let 
         credentials = Extension.CurrentCredential(),
@@ -79,28 +81,90 @@ Odoo.Login = (url as text, db as text) as record =>
     in
         connection;
 
-shared Odoo.Call = (connection as record, service as text, method as text, args as list) =>
-    JsonRpc.Call(
-        connection[url], 
-        service, 
-        method, 
-        {
-            connection[db], 
-            connection[uid],
-            Extension.CurrentCredential()[Password]
-        } & args
-    );
 
-// TODO: Make kwargs optional
-shared Odoo.ExecuteKW = (connection as record, model as text, method as text, args as list, kwargs as record) =>
-    Odoo.Call(connection, "object", "execute_kw", {model, method, args, kwargs});
+/* Wrapper arround `JsonRPC.Call` that handles authentication through the `connection` record created by `Odoo.Login`
+ *
+ * This function produces an HTTP POST request with roughly the following content:
+ *     {"jsonrpc": "2.0",
+ *      "method": "call",
+ *      "params": {"service": service,
+ *                 "method": method,
+ *                 "args": [db,
+ *                          uid,
+ *                          password,
+ *                          arg1,
+ *                          arg2]},
+ *      "id": 135468}
+ */
+shared Odoo.Call = (connection as record, service as text, method as text, args as list) =>
+    JsonRpc.Call(connection[url], service, method, {connection[db], connection[uid], Extension.CurrentCredential()[Password]} & args);
+
+
+/* Executes a backend function with the members of the `args` list as positional arguments 
+ * and the members of the `kwargs` record as keyword arguments. For example,
+ *     Odoo.ExecuteKW(connection, "some.model", "a_function", {"arg1", "arg2"}, [kwarg1="kwarg1val", kwarg2="kwarg2val"])
+ * executes the following python code in the server
+ *     self.env['some.model'].a_function('arg1', 'arg2', kwarg1=kwarg1val, kwarg2, kwarg2val)
+ *
+ *
+ * This function produces an HTTP POST request with roughly the following content:
+ *     {"jsonrpc": "2.0",
+ *      "method": "call",
+ *      "params": {"service": "object",
+ *                 "method": "execute_kw",
+ *                 "args": [db,
+ *                          uid,
+ *                          password,
+ *                          model,
+ *                          function,
+ *                          [arg1, arg2],
+ *                          {kwarg1: kwarg1val, kwarg2: kwarg2val}},
+ *      "id": 135468}
+ */
+shared Odoo.ExecuteKW = (connection as record, model as text, function as text, args as list, optional kwargs as record) =>
+    let
+        _kwargs = if kwargs <> null then kwargs else [],
+        result = Odoo.Call(connection, "object", "execute_kw", {model, function, args, _kwargs})
+    in
+        result;
+
+
+/* Searches for records based on the `search_domain` (https://www.odoo.com/documentation/13.0/reference/orm.html#reference-orm-domains)
+ * and returns corresponding table. Leave the search_domain as an empty list to return all records.
+ *
+ * It accepts the following params:
+ *    - offset  (int)    = 0
+ *    - limit   (int)    = None
+ *    - order   (str)    = none
+ *    - fields  (list)   = All
+ *    - context (record)
+ *
+ * Example:
+ *     Odoo.Search(connection, "account.invoice", {{"state", "=", "paid"}, {"date", ">", "2019-06-15"}}, [fields=["date", "partner_id"]])
+ */
+shared Odoo.Search = (connection as record, model as text, search_domain as list, 
+                      optional params as record) =>
+    let
+        _search_domain = if search_domain <> null then search_domain else {},
+        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "search_read", 
+            {_search_domain}, 
+            params
+        ))
+    in
+        result;
 
 
 /**************************************************
  ******************** JSON-RPC ********************
  **************************************************/
 
-// Adapted from https://www.odoo.com/documentation/12.0/howtos/backend.html#json-rpc-library
+/* Adapted from https://www.odoo.com/documentation/12.0/howtos/backend.html#json-rpc-library
+ *
+ * {"jsonrpc": "2.0",
+ *  "method": method,
+ *  "params": params,
+ *  "id": 135468}
+ */
 JsonRpc.Request = ( url as text, method as text, params as record ) =>
     let
         data = Json.FromValue([
@@ -114,15 +178,28 @@ JsonRpc.Request = ( url as text, method as text, params as record ) =>
         result = 
             if Record.HasFields(response, "error") then
                 error [
+                    /*
                     Reason = response[#"error"][message], 
                     Message = try response[#"error"][data][message] otherwise "JSON-RPC Error", 
                     Detail = try response[#"error"][data][debug] otherwise Lines.FromBinary(raw_response,null,null,1252){0}
+                    */
+                    Reason = try response[#"error"][message] & " (" & response[#"error"][data][message] & ")" otherwise response[#"error"][message], 
+                    Message = Lines.FromBinary(raw_response,null,null,1252){0}, 
+                    Detail = ""
                 ]
             else
                 response[result]
     in
         result;
 
+
+/* {"jsonrpc": "2.0",
+ *  "method": "call",
+ *  "params": {"service": service,
+ *             "method": method,
+ *             "args": args},
+ *  "id": 135468}
+ */
 JsonRpc.Call = (url as text, service as text, method as text, args) =>
     JsonRpc.Request(url, "call", [service=service, method=method, args=args]);
 
