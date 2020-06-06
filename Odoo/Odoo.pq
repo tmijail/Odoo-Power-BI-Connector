@@ -22,14 +22,29 @@ shared Odoo.Contents = (URL as text, Database as text) =>
                 ]
             )),
         table = #table({"Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {
+            { "Custom Query", Odoo.Search, "Table", "Table", true },
             { "Invoices", invoices, "Table", "Table", true },
             { "Partners", partners, "Table", "Table", true }
         }),
-        models = Odoo.Search(connection, "ir.model", {}, [fields={ "model", "name", "field_id", "info"}]),
+        models = Odoo.Search(connection, "ir.model", {{"abstract", "=", false}, {"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
+        models_table = 
+            #table({"model", "name", "data", "itemKind", "isLeaf"}, 
+                Table.TransformRows(models, each {
+                    [model], 
+                    [name], 
+                    Table.GenerateContainerLeaf([model], [model],  Odoo.Search(connection, [model], {}, [fields={"name"}])),
+                    "Table",
+                    false
+                })
+            ),
+        navTable2 = Table.ToNavigationTable(models_table, {"model"}, "name", "data", "itemKind", "itemKind", "isLeaf"),
         navTable = Table.ToNavigationTable(table, {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf"),
-        products = Odoo.Search(connection, "product.product", {}, [fields={"display_name"}, context=[active_test=false]])
+        products = Odoo.Search(connection, "product.product", {}, [fields={"display_name"}, context=[active_test=false]]),
+        Leaf = Table.ToNavigationTable(#table({"Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {
+            { "d", Table.GenerateContainerLeaf("a", "b", Odoo.Search(connection, "product.product", {}, [fields={"name"}, limit=10])), "Table", "Table", false }
+        }), {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
     in
-        navTable;
+        navTable2;
 
 
 // Data Source Kind description
@@ -204,9 +219,9 @@ JsonRpc.Call = (url as text, service as text, method as text, args) =>
     JsonRpc.Request(url, "call", [service=service, method=method, args=args]);
 
 
-/************************************************
- ******************** Common ********************
- ************************************************/
+/****************************************************
+ ******************** Nav Tables ********************
+ ****************************************************/
 
 Table.ToNavigationTable = (
     table as table,
@@ -230,3 +245,14 @@ Table.ToNavigationTable = (
         navigationTable = Value.ReplaceType(table, newTableType)
     in
         navigationTable;
+
+
+// Makes a navtable with a single entry
+Table.GenerateContainerLeaf = (Key as text, Name as text, Data, optional ItemKind as text, optional ItemName as text) as table => 
+    let
+        _ItemKind = if ItemKind <> null then ItemKind else "Table",
+        _ItemName = if ItemName <> null then ItemName else _ItemKind,
+        Table = #table({"Key", "Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {{Key, Name, Data, _ItemKind, _ItemName, true}}),
+        NavTable = Table.ToNavigationTable(Table, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+    in
+        NavTable;
