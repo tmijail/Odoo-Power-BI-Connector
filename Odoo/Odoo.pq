@@ -5,18 +5,7 @@ section Odoo;
 shared Odoo.Contents = (URL as text, Database as text) =>
     let
         connection = Odoo.Login(URL, Database),
-        models = Odoo.Search(connection, "ir.model", {{"abstract", "=", false}, {"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
-        models_table = 
-            #table({"model", "name", "data", "itemKind", "isLeaf"}, 
-                Table.TransformRows(models, each {
-                    [model], 
-                    [name], 
-                    Table.GenerateContainerLeaf([model], [model],  Odoo.Search(connection, [model], {}, [fields={"name"}])),
-                    "Table",
-                    false
-                })
-            ),
-        navTable = Table.ToNavigationTable(models_table, {"model"}, "name", "data", "itemKind", "itemKind", "isLeaf")
+        navTable = Odoo.CreateNavTable(connection)
     in
         navTable;
 
@@ -141,6 +130,24 @@ shared Odoo.Search = (connection as record, model as text, search_domain as list
         ))
     in
         result;
+
+
+Odoo.CreateNavTable = (connection as record) =>
+    let
+        models = Odoo.Search(connection, "ir.model", {{"abstract", "=", false}, {"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
+        models_table = 
+            #table({"model", "name", "data", "itemKind", "isLeaf"}, 
+                Table.TransformRows(models, each {
+                    [model], 
+                    [name] & " (" & [model] & ")", 
+                    Table.GenerateContainerLeaf([model], [name],  Odoo.Search(connection, [model], {}, [fields={"name"}])),
+                    "Table",
+                    false
+                })
+            ),
+        navTable = Table.ToNavigationTable(models_table, {"model"}, "name", "data", "itemKind", "itemKind", "isLeaf")
+    in
+        navTable;
 
 
 /**************************************************
