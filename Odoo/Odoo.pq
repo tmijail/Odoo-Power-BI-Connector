@@ -5,27 +5,6 @@ section Odoo;
 shared Odoo.Contents = (URL as text, Database as text) =>
     let
         connection = Odoo.Login(URL, Database),
-        invoices = 
-            Table.FromRecords(Odoo.ExecuteKW(connection, "account.invoice", "search_read", 
-                {{{"state", "=", "paid"}}}, 
-                [
-                    limit = 5,
-                    fields={"date_invoice", "partner_id", "display_name", "amount_total_signed", "state"}
-                ]
-            )),
-        partners = 
-            Table.FromRecords(Odoo.ExecuteKW(connection, "res.partner", "search_read", 
-                {}, 
-                [
-                    limit = 5,
-                    fields={"id", "display_name"}
-                ]
-            )),
-        table = #table({"Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {
-            { "Custom Query", Odoo.Search, "Table", "Table", true },
-            { "Invoices", invoices, "Table", "Table", true },
-            { "Partners", partners, "Table", "Table", true }
-        }),
         models = Odoo.Search(connection, "ir.model", {{"abstract", "=", false}, {"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
         models_table = 
             #table({"model", "name", "data", "itemKind", "isLeaf"}, 
@@ -37,14 +16,9 @@ shared Odoo.Contents = (URL as text, Database as text) =>
                     false
                 })
             ),
-        navTable2 = Table.ToNavigationTable(models_table, {"model"}, "name", "data", "itemKind", "itemKind", "isLeaf"),
-        navTable = Table.ToNavigationTable(table, {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf"),
-        products = Odoo.Search(connection, "product.product", {}, [fields={"display_name"}, context=[active_test=false]]),
-        Leaf = Table.ToNavigationTable(#table({"Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {
-            { "d", Table.GenerateContainerLeaf("a", "b", Odoo.Search(connection, "product.product", {}, [fields={"name"}, limit=10])), "Table", "Table", false }
-        }), {"Name"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+        navTable = Table.ToNavigationTable(models_table, {"model"}, "name", "data", "itemKind", "itemKind", "isLeaf")
     in
-        navTable2;
+        navTable;
 
 
 // Data Source Kind description
