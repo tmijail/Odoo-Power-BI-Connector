@@ -189,13 +189,16 @@ Odoo.TranslateType = (OdooType as text, required as logical) =>
 
 Odoo.CreateModelsNavTable = (connection as record) =>
     let
-        models = Odoo.Search(connection, "ir.model", {{"abstract", "=", false}, {"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
+        models = Odoo.Search(connection, "ir.model", {{"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
+        customQuery = (model as text, optional search_domain as nullable list, optional params as nullable record) =>
+            Odoo.Search(connection, model, search_domain, params),
         models_table = 
             #table({"model", "name", "data", "itemKind", "isLeaf"}, 
+                {{"customQuery", "Custom query", customQuery, "Function", "Function"}} & 
                 Table.TransformRows(models, each {
                     [model], 
                     [name] & " (" & [model] & ")", 
-                    Table.GenerateContainerLeaf([model], [name],  Odoo.Search(connection, [model], {}, [fields={"name"}])),
+                    Table.GenerateContainerLeaf([model], [name],  Odoo.Search(connection, [model], {}, [])),
                     "Table",
                     false
                 })
@@ -229,14 +232,15 @@ JsonRpc.Request = ( url as text, method as text, params as record ) =>
         result = 
             if Record.HasFields(response, "error") then
                 error [
-                    /*
+                    
                     Reason = response[#"error"][message], 
                     Message = try response[#"error"][data][message] otherwise "JSON-RPC Error", 
                     Detail = try response[#"error"][data][debug] otherwise Lines.FromBinary(raw_response,null,null,1252){0}
-                    */
+                    /*
                     Reason = try response[#"error"][message] & " (" & response[#"error"][data][message] & ")" otherwise response[#"error"][message], 
                     Message = Lines.FromBinary(raw_response,null,null,1252){0}, 
                     Detail = ""
+                    */
                 ]
             else
                 response[result]
