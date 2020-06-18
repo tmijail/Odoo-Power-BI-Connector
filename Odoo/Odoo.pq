@@ -137,15 +137,17 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
             {_search_domain}, 
             params
         )),
-        with_schema = if _set_schema then Odoo.SetSchema(connection, model, result) else result
+        with_schema = if _set_schema then Odoo.SetSchema(connection, result, model, params) else result
     in
         with_schema;
 
 
-Odoo.Schema = (connection as record, model as text, optional fields as list) as table =>
+Odoo.Schema = (connection as record, model as text, optional fields as nullable list) as table =>
     let
         search_domain_base = {{"model", "=", model}},
-        search_domain = if fields = null then search_domain_base else search_domain_base & {{"name", "in", fields}},
+        search_domain = if fields = null 
+                        then search_domain_base 
+                        else search_domain_base & {{"name", "in", fields & {"id"}}},
         fields_details = Odoo.Search(connection, "ir.model.fields", search_domain, [fields={"name", "ttype", "required"}], false),
         with_type = Table.AddColumn(fields_details, "Type", each Odoo.TranslateType([ttype], [required])),
         removed_cols = Table.RemoveColumns(with_type, {"required", "id", "ttype"}),
@@ -153,15 +155,17 @@ Odoo.Schema = (connection as record, model as text, optional fields as list) as 
     in
         renamed_cols;
 
-Odoo.SetSchema = (connection as record, model as text, table as table, optional enforceSchema as number) as table =>
+Odoo.SetSchema = (connection as record, table as table, model as text, optional params as nullable record, optional enforceSchema as number) as table =>
     let
-        _enforceSchema = if enforceSchema <> null then enforceSchema else 3,
-        fields = Table.ColumnNames(table),
+        _enforceSchema = if enforceSchema <> null then enforceSchema else 2,
+        fields = Record.FieldOrDefault(params, "fields", null),
         schema = Odoo.Schema(connection, model, fields),
         
         // We replace false values when they appear in columns which are nullable 
         // and of a type other than logical as they are used to represent null values.
-        nullable_non_logical = Table.SelectRows(schema, each Type.IsNullable([Type]) and not Type.Is([Type], type nullable logical))[Name],
+        nullable_non_logical = if Table.ColumnCount(table) = 0 // We check that the table isn't empty so that 
+                               then {}                         // we don't try to replace values in inexistent columns
+                               else Table.SelectRows(schema, each Type.IsNullable([Type]) and not Type.Is([Type], type nullable logical))[Name],
         replace_false_with_null = Table.ReplaceValue(table, false, null, Replacer.ReplaceValue, nullable_non_logical),
 
         with_schema = SchemaTransformTable(replace_false_with_null, schema, _enforceSchema)
@@ -196,8 +200,8 @@ Odoo.TranslateType = (OdooType as text, required as logical) =>
 Odoo.CreateModelsNavTable = (connection as record) =>
     let
         models = Odoo.Search(connection, "ir.model", {{"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
-        customQuery = (model as text, optional search_domain as nullable list, optional params as nullable record) =>
-            Odoo.Search(connection, model, search_domain, params),
+        customQuery = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
+            Odoo.Search(connection, model, search_domain, params, set_schema),
         models_table = 
             #table({"model", "name", "data", "itemKind", "isLeaf"}, 
                 {{"customQuery", "Custom query", customQuery, "Function", "Function"}} & 
