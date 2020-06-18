@@ -107,7 +107,7 @@ Odoo.Call = (connection as record, service as text, method as text, args as list
  *                          {kwarg1: kwarg1val, kwarg2: kwarg2val}},
  *      "id": 135468}
  */
-shared Odoo.ExecuteKW = (connection as record, model as text, function as text, args as list, optional kwargs as record) =>
+Odoo.ExecuteKW = (connection as record, model as text, function as text, args as list, optional kwargs as record) =>
     let
         _kwargs = if kwargs <> null then kwargs else [],
         result = Odoo.Call(connection, "object", "execute_kw", {model, function, args, _kwargs})
@@ -128,7 +128,7 @@ shared Odoo.ExecuteKW = (connection as record, model as text, function as text, 
  * Example:
  *     Odoo.Search(connection, "account.invoice", {{"state", "=", "paid"}, {"date", ">", "2019-06-15"}}, [fields=["date", "partner_id"]])
  */
-shared Odoo.Search = (connection as record, model as text, optional search_domain as list, 
+Odoo.Search = (connection as record, model as text, optional search_domain as list, 
                       optional params as record, optional set_schema as logical) =>
     let
         _search_domain = if search_domain <> null then search_domain else {},
@@ -158,7 +158,13 @@ Odoo.SetSchema = (connection as record, model as text, table as table, optional 
         _enforceSchema = if enforceSchema <> null then enforceSchema else 3,
         fields = Table.ColumnNames(table),
         schema = Odoo.Schema(connection, model, fields),
-        with_schema = SchemaTransformTable(table, schema, _enforceSchema)
+        
+        // We replace false values when they appear in columns which are nullable 
+        // and of a type other than logical as they are used to represent null values.
+        nullable_non_logical = Table.SelectRows(schema, each Type.IsNullable([Type]) and not Type.Is([Type], type nullable logical))[Name],
+        replace_false_with_null = Table.ReplaceValue(table, false, null, Replacer.ReplaceValue, nullable_non_logical),
+
+        with_schema = SchemaTransformTable(replace_false_with_null, schema, _enforceSchema)
     in
         with_schema;
 
