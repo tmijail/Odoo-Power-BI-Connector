@@ -41,13 +41,13 @@ Odoo.Icons = [
  **********************************************/
 
  Odoo.Databases = (url as text) as list =>
-     JsonRpc.Call(url & "/jsonrpc", "db", "list", {});
+     JsonRpc.Call(Uri.Combine(url, "jsonrpc"), "db", "list", {});
 
 // Finds the uid of the Odoo User.
  Odoo.GetUID = (url as text, db as text) as number =>
      let 
         credentials = Extension.CurrentCredential(),
-        jsonrpc_url = url & "/jsonrpc",
+        jsonrpc_url = Uri.Combine(url, "jsonrpc"),
         uid = JsonRpc.Call(jsonrpc_url, "common", "login", { db, credentials[Username], credentials[Password] }),
         result = if uid = false then error "Odoo authentication error" else uid
     in
@@ -57,7 +57,7 @@ Odoo.Icons = [
 Odoo.Login = (url as text, db as text) as record =>
     let
         uid = Odoo.GetUID(url, db),
-        connection = [url = url & "/jsonrpc",
+        connection = [url = url,
                       db = db,
                       uid = uid]
     in
@@ -81,7 +81,14 @@ Odoo.Login = (url as text, db as text) as record =>
 Odoo.Call = (connection as record, service as text, method as text, args as list) =>
     let
         _connection = if Record.HasFields(connection, "uid") then connection else Odoo.Login(connection[url], connection[db]),
-        result = JsonRpc.Call(_connection[url], service, method, {_connection[db], _connection[uid], Extension.CurrentCredential()[Password]} & args)
+        jsonrpc_url = Uri.Combine( _connection[url], "jsonrpc"),
+        result = JsonRpc.Call( jsonrpc_url, 
+                               service, 
+                               method, 
+                               { _connection[db], 
+                                 _connection[uid], 
+                                 Extension.CurrentCredential()[Password]} 
+                                 & args )
     in 
         result;
 
