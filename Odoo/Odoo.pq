@@ -149,6 +149,15 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
         with_schema;
 
 
+Odoo.ReadGroup = (connection as record, model as text, search_domain as list, fields as list, groupby as list, optional lazy as logical) =>
+    let
+        _lazy = if lazy <> null then lazy else false,
+        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "read_group", {search_domain}, [fields=fields, groupby=groupby, lazy=_lazy])),
+        without_domain = Table.RemoveColumns(result,{"__domain"})
+    in
+        without_domain;
+
+
 Odoo.Schema = (connection as record, model as text, optional fields as nullable list) as table =>
     let
         search_domain_base = {{"model", "=", model}},
