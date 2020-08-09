@@ -80,13 +80,12 @@ Odoo.Login = (url as text, db as text) as record =>
  */
 Odoo.Call = (connection as record, service as text, method as text, args as list) =>
     let
-        _connection = if Record.HasFields(connection, "uid") then connection else Odoo.Login(connection[url], connection[db]),
-        jsonrpc_url = Uri.Combine( _connection[url], "jsonrpc"),
+        jsonrpc_url = Uri.Combine( connection[url], "jsonrpc"),
         result = JsonRpc.Call( jsonrpc_url, 
                                service, 
                                method, 
-                               { _connection[db], 
-                                 _connection[uid], 
+                               { connection[db], 
+                                 connection[uid], 
                                  Extension.CurrentCredential()[Password]} 
                                  & args )
     in 
@@ -122,6 +121,17 @@ Odoo.ExecuteKW = (connection as record, model as text, function as text, args as
         result;
 
 
+Odoo._Search = (connection as record, model as text, search_domain as list, optional params as record) =>
+    Table.FromRecords(
+        Odoo.ExecuteKW(
+            connection, 
+            model, 
+            "search_read", 
+            { search_domain }, 
+            params
+    ));
+
+
 /* Searches for records based on the `search_domain` (https://www.odoo.com/documentation/13.0/reference/orm.html#reference-orm-domains)
  * and returns corresponding table. Leave the search_domain as an empty list to return all records.
  *
@@ -136,17 +146,76 @@ Odoo.ExecuteKW = (connection as record, model as text, function as text, args as
  *     Odoo.Search(connection, "account.invoice", {{"state", "=", "paid"}, {"date", ">", "2019-06-15"}}, [fields=["date", "partner_id"]])
  */
 Odoo.Search = (connection as record, model as text, optional search_domain as list, 
-                      optional params as record, optional set_schema as logical) =>
+               optional params as record, optional set_schema as logical) =>
     let
         _search_domain = if search_domain <> null then search_domain else {},
         _set_schema = if set_schema <> null then set_schema else true,
-        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "search_read", 
-            {_search_domain}, 
-            params
-        )),
-        with_schema = if _set_schema then Odoo.SetSchema(connection, result, model, params) else result
+        _params = if params <> null then params else [],
+
+        schema = Odoo.Schema(connection, model, params),
+
+        // If we don't specify which fields we want to read and the model has one2many fields
+        // we first check that we can read the models which those fields reference.
+        // We ignore the fields which reference models we can't read.
+        fields = if _params <> []
+                 then Record.FieldOrDefault(params, "fields", null)
+                 else null,
+        o2m_fields = Table.SelectRows(schema, each ([type] = "one2many")),
+        models_we_can_read = Odoo.CheckPermissions(connection, o2m_fields[relation]),
+        schema2 = if fields = null and _set_schema
+                  then Table.SelectRows(
+                           schema, 
+                           each not ( [type] = "one2many" and 
+                                      not List.Contains(models_we_can_read, [relation]) ))
+                  else schema,
+
+        _params2 = if fields = null and _set_schema
+                   then _params & [fields=schema2[Name]]
+                   else params,
+
+        result = Odoo._Search(connection, model, _search_domain, _params2),
+
+
+        // We replace false values when they appear in columns which are nullable 
+        // and of a type other than logical as they are used to represent null values.
+        nullable_non_logical = if Table.ColumnCount(result) = 0 // We check that the table isn't empty so that 
+                               then {}                          // we don't try to replace values in inexistent columns
+                               else Table.SelectRows(schema2, 
+                                                     each Type.IsNullable([Type]) and not Type.Is([Type], 
+                                                     type nullable logical))[Name],
+
+        replace_false_with_null = Table.ReplaceValue(result, false, null, Replacer.ReplaceValue, nullable_non_logical),
+        
+        with_schema = if _set_schema 
+                      then Odoo.SetSchema(connection, replace_false_with_null, schema2) 
+                      else result
     in
         with_schema;
+
+
+/*  Checks whether a user has a certain permission over a list of models.
+ *  Returns the subset of `models` that the user indicated by `uid` has `permission` permission on.
+ *  By default `permission` = "read" and `uid` = `connection[uid]`
+ */
+Odoo.CheckPermissions = (connection as record, models as list, optional uid as number, optional permission as text) =>
+    let
+        _uid = if uid <> null then uid else connection[uid],
+        _permission = if permission <> null then permission else "read",
+        permission_field = "perm_" & _permission,
+        models_with_perm = Odoo.ReadGroup(
+            connection, 
+            "ir.model.access", 
+            { {permission_field, "=", true},
+              {"model_id.model", "in", models},
+              {"group_id.users", "child_of", _uid} },
+            {},
+            {"model_id"}),
+        ids = List.Transform(models_with_perm[model_id], List.First),
+        model_names = if List.Count(models) <> 0 // Shortcut
+                      then Odoo._Search(connection, "ir.model", {{"id", "in", ids}}, [fields={"model"}])[model]
+                      else {}
+    in
+        model_names;
 
 
 Odoo.ReadGroup = (connection as record, model as text, search_domain as list, fields as list, groupby as list, optional lazy as logical) =>
@@ -158,35 +227,39 @@ Odoo.ReadGroup = (connection as record, model as text, search_domain as list, fi
         without_domain;
 
 
-Odoo.Schema = (connection as record, model as text, optional fields as nullable list) as table =>
-    let
-        search_domain_base = {{"model", "=", model}},
-        search_domain = if fields = null 
-                        then search_domain_base 
-                        else search_domain_base & {{"name", "in", fields & {"id"}}},
-        fields_details = Odoo.Search(connection, "ir.model.fields", search_domain, [fields={"name", "ttype", "required"}], false),
-        with_type = Table.AddColumn(fields_details, "Type", each Odoo.TranslateType([ttype], [required])),
-        removed_cols = Table.RemoveColumns(with_type, {"required", "id", "ttype"}),
-        renamed_cols = Table.RenameColumns(removed_cols, {{"name", "Name"}})
-    in
-        renamed_cols;
+Odoo.FieldsGet = (connection as record, model as text, optional fields as nullable list, optional attributes as nullable list) as record =>
+    Odoo.ExecuteKW(connection, model, "fields_get", {fields, attributes});
 
-Odoo.SetSchema = (connection as record, table as table, model as text, optional params as nullable record, optional enforceSchema as number) as table =>
+
+Odoo._Schema = (connection as record, model as text, optional fields as nullable list) as table =>
+    let 
+        fields_details = Odoo.FieldsGet(connection, model, fields, {"type", "required", "relation"}),
+        fields_details_table = Table.ExpandRecordColumn(Record.ToTable(fields_details), "Value", {"required", "type", "relation"}),
+
+        with_type = Table.AddColumn(fields_details_table, "Type", each Odoo.TranslateType([type], [required])),
+        removed_cols = Table.RemoveColumns(with_type, {"required"})
+    in
+        removed_cols;
+
+
+Odoo.Schema = (connection as record, model as text, optional params as nullable record) as table =>
+    let
+        fields = if params <> null
+                 then Record.FieldOrDefault(params, "fields", null)
+                 else null,
+        schema = Odoo._Schema(connection, model, fields)
+    in 
+        schema;
+
+
+Odoo.SetSchema = (connection as record, table as table, schema as table, optional enforceSchema as number) as table =>
     let
         _enforceSchema = if enforceSchema <> null then enforceSchema else 2,
-        fields = Record.FieldOrDefault(params, "fields", null),
-        schema = Odoo.Schema(connection, model, fields),
-        
-        // We replace false values when they appear in columns which are nullable 
-        // and of a type other than logical as they are used to represent null values.
-        nullable_non_logical = if Table.ColumnCount(table) = 0 // We check that the table isn't empty so that 
-                               then {}                         // we don't try to replace values in inexistent columns
-                               else Table.SelectRows(schema, each Type.IsNullable([Type]) and not Type.Is([Type], type nullable logical))[Name],
-        replace_false_with_null = Table.ReplaceValue(table, false, null, Replacer.ReplaceValue, nullable_non_logical),
-
-        with_schema = SchemaTransformTable(replace_false_with_null, schema, _enforceSchema)
+        only_PBI_schema = Table.SelectColumns(schema, {"Name", "Type"}), // Just the columns relevant to the PowerBI schema
+        with_schema = SchemaTransformTable(table, only_PBI_schema, _enforceSchema)
     in
         with_schema;
+
 
 Odoo.TypeTranslations = [
     boolean = type logical,
@@ -253,7 +326,7 @@ JsonRpc.Request = ( url as text, method as text, params as record ) =>
             params = params,
             id = Number.RoundDown(Number.RandomBetween(0, 1000000000))
         ]),
-        raw_response = Web.Contents(url, [ Content = data, Headers = [#"Content-Type" = "application/json"] ]),
+        raw_response = Web.Contents(url, [ Content = data, Headers = [#"Content-Type" = "application/json"], Timeout = #duration(0, 0, 15, 0) ]),
         response = Json.Document(raw_response),
         result = 
             if Record.HasFields(response, "error") then
