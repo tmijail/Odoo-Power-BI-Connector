@@ -195,9 +195,25 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
                                                      type nullable logical))[Name],
 
         replace_false_with_null = Table.ReplaceValue(result, false, null, Replacer.ReplaceValue, nullable_non_logical),
+
+        // Odoo returns One2Many fields as lists with the format {id, name}.
+        // We replace those lists with records [id=id, name=name] so that we can more easily
+        // split them into columns.
+
+        list_to_record_map = (x) => if (x <> null) then [id=x{0}, name=x{1}] else null,
+        columns_to_map_over = Table.RemoveColumns(
+            Table.SelectRows(schema2, each ([type] = "many2one")),
+            {"type", "relation", "Type"}),
+        transform_operations = Table.ToRows(Table.AddColumn(columns_to_map_over, "Transform", each list_to_record_map)),
+        with_o2m_as_records = 
+            if (List.IsEmpty(transform_operations)) then
+                replace_false_with_null
+            else
+                Table.TransformColumns(replace_false_with_null, transform_operations),
+
         
         with_schema = if _set_schema 
-                      then Odoo.SetSchema(connection, replace_false_with_null, schema2) 
+                      then Odoo.SetSchema(connection, with_o2m_as_records, schema2) 
                       else result
     in
         with_schema;
@@ -283,7 +299,7 @@ Odoo.TypeTranslations = [
     #"date" = type date,
     #"datetime" = type datetime,
     many2one = type list,
-    one2many = type list,
+    one2many = type record,
     many2many = type list
 ];
 
