@@ -311,12 +311,47 @@ Odoo.TranslateType = (OdooType as text, required as logical) =>
     in
         MLanguageType;
 
+CustomQueryType = type function (
+    model as (type text meta [
+        Documentation.FieldCaption = "Model",
+        Documentation.FieldDescription = "Technical name of the model to query",
+        Documentation.SampleValues = {"res.partner", "account.invoice"}
+    ]),
+    optional search_domain as (type nullable list meta [
+        Documentation.FieldCaption = "Search domain",
+        Documentation.FieldDescription = "See https://www.odoo.com/documentation/14.0/reference/orm.html#reference-orm-domains",
+        Documentation.SampleValues = {"{{""name"", ""ilike"", ""dave""}, {""customer"", ""="", true}}", "account.invoice"},
+        Formatting.IsMultiLine = true,
+        Formatting.IsCode = true
+    ]),
+    optional params as (type nullable record meta [
+        Documentation.FieldCaption = "Keyword parameters",
+        Documentation.FieldDescription = "Record containing parameters to be passed as keywords to 'search_read'. Can include: offset, limit, order, fields, context.",
+        Documentation.SampleValues = {"[limit=10, fields={""name"", ""state_id"", ""country_id""}, order=""name""]"},
+        Formatting.IsMultiLine = true,
+        Formatting.IsCode = true
+    ]),
+    optional set_schema as (type logical meta [
+        Documentation.FieldCaption = "Set schema?",
+        Documentation.FieldDescription = "Wheter or not to automatically set the resulting table's schema according to the Odoo fields' definitions. Default: true.",
+        Documentation.SampleValues = {"true", "false"},
+        Documentation.AllowedValues = {true, false}
+    ]))
+    as table meta [
+        Documentation.Name = "Custom Query",
+        Documentation.LongDescription = "Analogous to the Odoo 'search_read' method.",
+        Documentation.Examples = {[
+            Description = "Returns the 10 latest invoices",
+            Code = "#""Custom query""(""account.invoice"", {{""type"", ""="", ""out_invoice""}, {""state"", ""in"", {""open"", ""paid""}}}, [limit=10])"
+        ]}
+    ];
 
 Odoo.CreateModelsNavTable = (connection as record) =>
     let
         models = Odoo.Search(connection, "ir.model", {{"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
-        customQuery = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
+        customQueryImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
             Odoo.Search(connection, model, search_domain, params, set_schema),
+        customQuery = Value.ReplaceType(customQueryImpl, CustomQueryType),
         models_table = 
             #table({"model", "name", "data", "itemKind", "isLeaf"}, 
                 {{"customQuery", "Custom query", customQuery, "Function", "Function"}} & 
