@@ -12,6 +12,13 @@ shared Odoo.Contents = (URL as text, Database as text) =>
 
 // Data Source Kind description
 Odoo = [
+    TestConnection = (dataSourcePath) =>
+        let
+            json = Json.Document(dataSourcePath),
+            URL = json[URL],
+            Database = json[Database]
+        in
+            { "Odoo.Contents", URL, Database },
     Authentication = [
         UsernamePassword = []
     ],
