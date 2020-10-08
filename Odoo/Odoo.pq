@@ -47,8 +47,10 @@ Odoo.Icons = [
  ******************** Odoo ********************
  **********************************************/
 
+
  Odoo.Databases = (url as text) as list =>
      JsonRpc.Call(Uri.Combine(url, "jsonrpc"), "db", "list", {});
+
 
 // Finds the uid of the Odoo User.
  Odoo.GetUID = (url as text, db as text) as number =>
@@ -59,6 +61,7 @@ Odoo.Icons = [
         result = if uid = false then error "Odoo authentication error" else uid
     in
         result;
+
 
 // Finds the uid of the Odoo User and saves all the information needed to connect to the db in the `connection` record.
 Odoo.Login = (url as text, db as text) as record =>
