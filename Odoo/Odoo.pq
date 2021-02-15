@@ -341,8 +341,19 @@ CustomQueryType = type function (
         Documentation.Name = "Custom Query",
         Documentation.LongDescription = "Analogous to the Odoo 'search_read' method.",
         Documentation.Examples = {[
-            Description = "Returns the 10 latest invoices",
-            Code = "#""Custom query""(""account.invoice"", {{""type"", ""="", ""out_invoice""}, {""state"", ""in"", {""open"", ""paid""}}}, [limit=10])"
+            Description = "Get the names and emails of our contacts at Azure Interior.",
+            Code = 
+"#""Custom query""(
+    ""res.partner"", 
+    { {""parent_name"", ""="", ""Azure Interior""} }, 
+    [ fields={""name"", ""email""} ]
+)",
+            Result = 
+"Table.FromRecords({
+    [email = ""brandon.freeman55@example.com"", name = ""Brandon Freeman"", id = 26],
+    [email = ""colleen.diaz83@example.com"",    name = ""Colleen Diaz"",    id = 33],
+    [email = ""nicole.ford75@example.com"",     name = ""Nicole Ford"",     id = 27]
+})"
         ]}
     ];
 
