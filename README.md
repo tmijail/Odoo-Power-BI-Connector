@@ -10,6 +10,77 @@ Before this connector, the only way to query Odoo from Power BI was to connect d
 3. Open Power BI Desktop and enable loading unsigned connectors (*File > Options and settings > Options > Security > Data Extensions > Allow any extension to load without warning or validation*)
 4. Restart Power BI Desktop
 
+## Use
+
+Currently a big limitation of this connector is that it doesn't support query folding. This means that if you load a table and filter it through the Query Editor UI, Power BI will download the whole table and then filter it locally instead of sending the search context to the server and downloading just the needed columns and rows. This is inefficient at best and can lead to an `Odoo Server Error: Out of memory exception` at worst.
+
+Because of this, the current recommended way to get data is through the `#"Custom query"` function.
+
+![Demonstration](usage.gif)
+
+### Custom query
+
+`#"Custom query"` is analogous to Odoo's `search_read` function. 
+
+```M
+#"Custom query"(
+    model as text, 
+    optional search_domain as list, 
+    optional params as record, 
+    optional set_schema as bool
+)
+```
+
+Where:
+
+ - `model`: Technical name of the model to query. *Examples: "res.partner", "account.invoice"*.
+
+ - `search_domain`: An Odoo [Search Domain](https://www.odoo.com/documentation/14.0/reference/orm.html#reference-orm-domains). 
+ 
+    It's important to remember that lists in the M Language are enclosed in cuvy brackets (`{...}`). So the following python search domain
+
+    ```python
+    [('name','=','ABC'),
+    ('language.code','!=','en_US'),
+    '|',('country_id.code','=','be'),
+        ('country_id.code','=','de')]
+    ```
+    should be written in M like
+
+    ```M
+    {{"name","=","ABC"},
+    {"language.code","!=","en_US"},
+    "|",{"country_id.code","=","be"},
+        {"country_id.code","=","de"}}
+    ```
+
+ - `params`: A record containing any keyword parameter that we want to pass to `search_read`. Can include:
+
+   - `offset as Int64.Type`
+   - `limit as Int64.Type`
+   - `order as text`
+   - `fields as list`
+   - `context as record`
+
+ - `set_schema`: Whether or not to set the column types according to the field definition on Odoo. 
+
+#### Example: Get the names and emails of our contacts at Azure Interior
+
+```M
+#"Custom query"(
+    "res.partner",
+    { {"parent_name", "=", "Azure Interior"} },
+    [ fields = {"name", "email"}, order = "name" ]
+)
+```
+
+| email                         | name            | id |
+| ----------------------------- | --------------- | -- |
+| brandon.freeman55@example.com | Brandon Freeman | 26 |
+| colleen.diaz83@example.com    | Colleen Diaz    | 33 |
+| nicole.ford75@example.com     | Nicole Ford     | 27 |
+
+
 ## Build
 1. Install Visual Studio
 2. Install the [Power Query SDK](https://marketplace.visualstudio.com/items?itemName=Dakahn.PowerQuerySDK)
