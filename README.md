@@ -12,7 +12,7 @@ Before this connector, the only way to query Odoo from Power BI was to connect d
 
 ## Use
 
-Currently a big limitation of this connector is that it doesn't support query folding. This means that if you load a table and filter it through the Query Editor UI, Power BI will download the whole table and then filter it locally instead of sending the search context to the server and downloading just the needed columns and rows. This is inefficient at best and can lead to an `Odoo Server Error: Out of memory exception` at worst.
+Currently a big limitation of this connector is that it doesn't support query folding. This means that if you load a table and filter it through the Query Editor UI, Power BI will download the whole table and then filter it locally instead of sending the filter definition to the server and downloading just the needed columns and rows. This is inefficient at best and can lead to an `Odoo Server Error: Out of memory exception` at worst.
 
 Because of this, the current recommended way to get data is through the `#"Custom query"` function.
 
