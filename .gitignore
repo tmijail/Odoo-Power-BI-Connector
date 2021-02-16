@@ -340,4 +340,4 @@ ASALocalRun/
 healthchecksdb
 
 # Unit tests configuration
-test-server.json
+Odoo/test-server.json
