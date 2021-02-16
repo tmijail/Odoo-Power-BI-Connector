@@ -1,6 +1,8 @@
 ﻿[Version = "0.0.1"]
 section Odoo;
 
+shared Odoo.TestServer = Json.Document(Text.FromBinary(Extension.Contents("test-server.json")));
+
 [DataSource.Kind="Odoo", Publish="Odoo.Publish"]
 shared Odoo.Contents = (URL as text, Database as text) =>
     let

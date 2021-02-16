@@ -1,12 +1,11 @@
 ﻿section OdooUnitTests;
 
-URL = "http://localhost:8069";
-DB  = "db";
-
 shared Odoo.UnitTest =
 [
     // Put any common variables here if you only want them to be evaluated once
-    root = Odoo.Contents(URL, DB),
+    url = Odoo.TestServer[url],
+    db = Odoo.TestServer[db],
+    root = Odoo.Contents(url, db),
     customQuery = root{[model="customQuery"]}[data],
     resPartner = customQuery("res.partner", {}, [limit=10]),
 
