@@ -62,7 +62,7 @@ Where:
    - `fields as list`
    - `context as record`
 
- - `set_schema`: Whether or not to set the column types according to the field definition on Odoo. 
+ - `set_schema`: Whether or not to set the column types according to the field definition on Odoo. Defaults to `true`.
 
 #### Example: Get the names and emails of our contacts at Azure Interior
 
