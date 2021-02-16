@@ -257,6 +257,31 @@ Odoo.FieldsGet = (connection as record, model as text, optional fields as nullab
     Odoo.ExecuteKW(connection, model, "fields_get", {fields, attributes});
 
 
+Odoo.TypeTranslations = [
+    boolean = type logical,
+    char = type text,
+    #"text" = type text,
+    float = Decimal.Type,
+    integer = Int64.Type,
+    #"binary" = type binary,
+    image = type binary,
+    monetary = Currency.Type,
+    #"date" = type date,
+    #"datetime" = type datetime,
+    many2one = type list,
+    one2many = type record,
+    many2many = type list
+];
+
+
+Odoo.TranslateType = (OdooType as text, required as logical) =>
+    let
+        _MLanguageType = Record.FieldOrDefault(Odoo.TypeTranslations, OdooType, type any),
+        MLanguageType  = if required then _MLanguageType else type nullable _MLanguageType
+    in
+        MLanguageType;
+
+
 Odoo._Schema = (connection as record, model as text, optional fields as nullable list) as table =>
     let 
         fields_details = Odoo.FieldsGet(connection, model, fields, {"type", "required", "relation"}),
@@ -286,30 +311,6 @@ Odoo.SetSchema = (connection as record, table as table, schema as table, optiona
     in
         with_schema;
 
-
-Odoo.TypeTranslations = [
-    boolean = type logical,
-    char = type text,
-    #"text" = type text,
-    float = Decimal.Type,
-    integer = Int64.Type,
-    #"binary" = type binary,
-    image = type binary,
-    monetary = Currency.Type,
-    #"date" = type date,
-    #"datetime" = type datetime,
-    many2one = type list,
-    one2many = type record,
-    many2many = type list
-];
-
-
-Odoo.TranslateType = (OdooType as text, required as logical) =>
-    let
-        _MLanguageType = Record.FieldOrDefault(Odoo.TypeTranslations, OdooType, type any),
-        MLanguageType  = if required then _MLanguageType else type nullable _MLanguageType
-    in
-        MLanguageType;
 
 CustomQueryType = type function (
     model as (type text meta [
