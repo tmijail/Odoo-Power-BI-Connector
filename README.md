@@ -62,6 +62,8 @@ Where:
    - `fields as list`
    - `context as record`
 
+    **Note:** If `fields` is not specified, the default behaviour is to read all fields except those `one2many` fields which reference models the user doesn't have permission to read.
+
  - `set_schema`: Whether or not to set the column types according to the field definition on Odoo. Defaults to `true`.
 
 #### Example: Get the names and emails of our contacts at Azure Interior
