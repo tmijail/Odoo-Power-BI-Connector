@@ -14,16 +14,16 @@ Before this connector, the only way to query Odoo from Power BI was to connect d
 
 Currently a big limitation of this connector is that it doesn't support query folding. This means that if you load a table and filter it through the Power Query Editor UI, Power BI will download the whole table and then filter it locally instead of sending the filter definition to the server and downloading just the needed columns and rows. This is inefficient at best and can lead to an `Odoo Server Error: Out of memory exception` at worst.
 
-Because of this, the current recommended way to get data is through the `#"Custom query"` function.
+Because of this, the current recommended way to get data is through the `search_read` function.
 
 ![Demonstration](usage.gif)
 
-### Custom query
+### search_read
 
-`#"Custom query"` is analogous to Odoo's `search_read` function. 
+`search_read` allows us to query an Odoo model. For more information see the [Odoo documentation](https://www.odoo.com/documentation/master/webservices/odoo.html#search-and-read). 
 
 ```M
-#"Custom query"(
+search_read(
     model as text, 
     optional search_domain as list, 
     optional params as record, 
@@ -35,7 +35,7 @@ Where:
 
  - `model`: Technical name of the model to query. *Examples: "res.partner", "account.invoice"*.
 
- - `search_domain`: An Odoo [Search Domain](https://www.odoo.com/documentation/14.0/reference/orm.html#reference-orm-domains). 
+ - `search_domain`: An Odoo [Search Domain](https://www.odoo.com/documentation/master/reference/orm.html#reference-orm-domains). 
  
     It's important to remember that lists in the M Language are enclosed in cuvy brackets (`{...}`). So the following python search domain
 
@@ -67,7 +67,7 @@ Where:
 #### Example: Get the names and emails of our contacts at Azure Interior
 
 ```M
-#"Custom query"(
+search_read(
     "res.partner",
     { {"parent_name", "=", "Azure Interior"} },
     [ fields = {"name", "email"}, order = "name" ]

@@ -6,17 +6,18 @@ shared Odoo.UnitTest =
     url = Odoo.TestServer[url],
     db = Odoo.TestServer[db],
     root = Odoo.Contents(url, db),
-    customQuery = root{[model="customQuery"]}[data],
-    resPartner = customQuery("res.partner", {}, [limit=10]),
+    search_read = root{[Key="Functions"]}[Data]{[Function="search_read"]}[Data],
+    resPartner = search_read("res.partner", {}, [limit=10]),
 
     // Fact(<Name of the Test>, <Expected Value>, <Actual Value>)
     // <Expected Value> and <Actual Value> can be a literal or let statement
     facts =
     {
         Fact("Check that we have more than one entry in our nav table", true, Table.RowCount(root) > 1),
-        Fact("Check that we can query 'res.partner' through customQuery", true, not Table.IsEmpty(resPartner)),
+        Fact("Check that we have more than one entry in our 'Tables' nav table", true, Table.RowCount(root{[Key="Tables"]}[Data]) > 1),
+        Fact("Check that we can query 'res.partner' through search_read", true, not Table.IsEmpty(resPartner)),
         Fact("Check that the schema for 'res.partner' is set", true, List.Distinct(Table.Column(Type.TableSchema(Value.Type(resPartner)), "TypeName")) <> {"Any.Type"}),
-        Fact("Check that we can navigate to 'res.partner' from the nav table", true, not Table.IsEmpty(root{[model="res.partner"]}[data]{[Key="res.partner"]}[Data]))
+        Fact("Check that we can navigate to 'res.partner' from the nav table", true, not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.partner"]}[Data]{[Key="res.partner"]}[Data]))
     },
 
     report = Facts.Summarize(facts)

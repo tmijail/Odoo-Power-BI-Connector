@@ -1,4 +1,4 @@
-﻿[Version = "0.0.1"]
+﻿[Version = "0.1.0"]
 section Odoo;
 
 shared Odoo.TestServer = Json.Document(Text.FromBinary(Extension.Contents("test-server.json")));
@@ -7,7 +7,7 @@ shared Odoo.TestServer = Json.Document(Text.FromBinary(Extension.Contents("test-
 shared Odoo.Contents = (URL as text, Database as text) =>
     let
         connection = Odoo.Login(URL, Database),
-        navTable = Odoo.CreateModelsNavTable(connection)
+        navTable = Odoo.CreateNavTable(connection)
     in
         navTable;
 
@@ -144,7 +144,7 @@ Odoo._Search = (connection as record, model as text, search_domain as list, opti
     ));
 
 
-/* Searches for records based on the `search_domain` (https://www.odoo.com/documentation/13.0/reference/orm.html#reference-orm-domains)
+/* Searches for records based on the `search_domain` (https://www.odoo.com/documentation/master/reference/orm.html#reference-orm-domains)
  * and returns corresponding table. Leave the search_domain as an empty list to return all records.
  *
  * It accepts the following params:
@@ -314,7 +314,7 @@ Odoo.SetSchema = (connection as record, table as table, schema as table, optiona
         with_schema;
 
 
-CustomQueryType = type function (
+SearchReadType = type function (
     model as (type text meta [
         Documentation.FieldCaption = "Model",
         Documentation.FieldDescription = "Technical name of the model to query",
@@ -322,7 +322,7 @@ CustomQueryType = type function (
     ]),
     optional search_domain as (type nullable list meta [
         Documentation.FieldCaption = "Search domain",
-        Documentation.FieldDescription = "See https://www.odoo.com/documentation/14.0/reference/orm.html#reference-orm-domains",
+        Documentation.FieldDescription = "See https://www.odoo.com/documentation/master/reference/orm.html#reference-orm-domains",
         Documentation.SampleValues = {"{{""name"", ""ilike"", ""dave""}, {""customer"", ""="", true}}", "account.invoice"},
         Formatting.IsMultiLine = true,
         Formatting.IsCode = true
@@ -341,12 +341,12 @@ CustomQueryType = type function (
         Documentation.AllowedValues = {true, false}
     ]))
     as table meta [
-        Documentation.Name = "Custom Query",
-        Documentation.LongDescription = "Analogous to the Odoo 'search_read' method.",
+        Documentation.Name = "search_read",
+        Documentation.LongDescription = "Queries an Odoo model. See https://www.odoo.com/documentation/master/webservices/odoo.html#search-and-read",
         Documentation.Examples = {[
             Description = "Get the names and emails of our contacts at Azure Interior.",
             Code = 
-"#""Custom query""(
+"search_read(
     ""res.partner"", 
     { {""parent_name"", ""="", ""Azure Interior""} }, 
     [ fields={""name"", ""email""} ]
@@ -360,15 +360,27 @@ CustomQueryType = type function (
         ]}
     ];
 
+
+Odoo.CreateFunctionsNavTable = (connection as record) =>
+    let
+        customQueryImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
+            Odoo.Search(connection, model, search_domain, params, set_schema),
+        search_read = Value.ReplaceType(customQueryImpl, SearchReadType),
+        fun_table =
+            #table(
+                { "Function",    "Name",        "Data",      "ItemKind", "IsLeaf"}, 
+                {{"search_read", "search_read", search_read, "Function", "Function"}}
+            ),
+        navTable = Table.ToNavigationTable(fun_table, {"Function"}, "Name", "Data", "ItemKind", "ItemKind", "IsLeaf")
+    in
+        navTable;
+
+
 Odoo.CreateModelsNavTable = (connection as record) =>
     let
         models = Odoo.Search(connection, "ir.model", {{"transient", "=", false}}, [fields={"model", "name"}, order="model"]), 
-        customQueryImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
-            Odoo.Search(connection, model, search_domain, params, set_schema),
-        customQuery = Value.ReplaceType(customQueryImpl, CustomQueryType),
         models_table = 
-            #table({"model", "name", "data", "itemKind", "isLeaf"}, 
-                {{"customQuery", "Custom query", customQuery, "Function", "Function"}} & 
+            #table({"Model", "Name", "Data", "ItemKind", "IsLeaf"}, 
                 Table.TransformRows(models, each {
                     [model], 
                     [name] & " (" & [model] & ")", 
@@ -377,7 +389,20 @@ Odoo.CreateModelsNavTable = (connection as record) =>
                     false
                 })
             ),
-        navTable = Table.ToNavigationTable(models_table, {"model"}, "name", "data", "itemKind", "itemKind", "isLeaf")
+        navTable = Table.ToNavigationTable(models_table, {"Model"}, "Name", "Data", "ItemKind", "ItemKind", "IsLeaf")
+    in
+        navTable;
+
+
+Odoo.CreateNavTable = (connection as record) =>
+    let
+        master_table =
+            #table(
+                { "Key",       "Name",      "Data",                                   "ItemKind", "IsLeaf"}, 
+                {{"Functions", "Functions", Odoo.CreateFunctionsNavTable(connection), "Function", false},
+                 {"Tables",    "Tables",    Odoo.CreateModelsNavTable(connection),    "Table",    false}}
+            ),
+        navTable = Table.ToNavigationTable(master_table, {"Key"}, "Name", "Data", "ItemKind", "ItemKind", "IsLeaf")
     in
         navTable;
 
