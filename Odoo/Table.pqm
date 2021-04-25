@@ -1,0 +1,39 @@
+﻿let
+    Table.ToNavigationTable = (
+        table as table,
+        keyColumns as list,
+        nameColumn as text,
+        dataColumn as text,
+        itemKindColumn as text,
+        itemNameColumn as text,
+        isLeafColumn as text
+    ) as table =>
+        let
+            tableType = Value.Type(table),
+            newTableType = Type.AddTableKey(tableType, keyColumns, true) meta 
+            [
+                NavigationTable.NameColumn = nameColumn, 
+                NavigationTable.DataColumn = dataColumn,
+                NavigationTable.ItemKindColumn = itemKindColumn, 
+                Preview.DelayColumn = itemNameColumn, 
+                NavigationTable.IsLeafColumn = isLeafColumn
+            ],
+            navigationTable = Value.ReplaceType(table, newTableType)
+        in
+            navigationTable,
+    
+    // Makes a navtable with a single entry
+    Table.GenerateContainerLeaf = (Key as text, Name as text, Data, optional ItemKind as text, optional ItemName as text) as table => 
+    let
+        _ItemKind = if ItemKind <> null then ItemKind else "Table",
+        _ItemName = if ItemName <> null then ItemName else _ItemKind,
+        Table = #table({"Key", "Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {{Key, Name, Data, _ItemKind, _ItemName, true}}),
+        NavTable = Table.ToNavigationTable(Table, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
+    in
+        NavTable
+
+in
+    [ 
+        ToNavigationTable = Table.ToNavigationTable,
+        GenerateContainerLeaf = Table.GenerateContainerLeaf
+    ]

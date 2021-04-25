@@ -1,0 +1,51 @@
+﻿let
+    /* Adapted from https://www.odoo.com/documentation/12.0/howtos/backend.html#json-rpc-library
+     *
+     * {"jsonrpc": "2.0",
+     *  "method": method,
+     *  "params": params,
+     *  "id": 135468}
+     */
+    JsonRpc.Request = ( url as text, method as text, params as record ) =>
+        let
+            data = Json.FromValue([
+                jsonrpc = "2.0",
+                method = method,
+                params = params,
+                id = Number.RoundDown(Number.RandomBetween(0, 1000000000))
+            ]),
+            raw_response = Web.Contents(url, [ Content = data, Headers = [#"Content-Type" = "application/json"], Timeout = #duration(0, 0, 15, 0) ]),
+            response = Json.Document(raw_response),
+            result = 
+                if Record.HasFields(response, "error") then
+                    error [
+                    
+                        Reason = response[#"error"][message], 
+                        Message = try response[#"error"][data][message] otherwise "JSON-RPC Error", 
+                        Detail = try response[#"error"][data][debug] otherwise Lines.FromBinary(raw_response,null,null,1252){0}
+                        /*
+                        Reason = try response[#"error"][message] & " (" & response[#"error"][data][message] & ")" otherwise response[#"error"][message], 
+                        Message = Lines.FromBinary(raw_response,null,null,1252){0}, 
+                        Detail = ""
+                        */
+                    ]
+                else
+                    response[result]
+        in
+            result,
+
+
+    /* {"jsonrpc": "2.0",
+     *  "method": "call",
+     *  "params": {"service": service,
+     *             "method": method,
+     *             "args": args},
+     *  "id": 135468}
+     */
+    JsonRpc.Call = (url as text, service as text, method as text, args) =>
+        JsonRpc.Request(url, "call", [service=service, method=method, args=args])
+in
+    [ 
+        Request = JsonRpc.Request,
+        Call = JsonRpc.Call
+    ]

@@ -45,6 +45,37 @@ Odoo.Icons = [
 ];
 
 
+/************************************************
+ ******************* Includes *******************
+ ************************************************/
+
+
+Extension.LoadFunction = (name as text) =>
+    let
+        binary = Extension.Contents(name),
+        asText = Text.FromBinary(binary)
+    in
+        Expression.Evaluate(asText, #shared);
+
+JsonRpc = Extension.LoadFunction("JsonRpc.pqm");
+JsonRpc.Request = JsonRpc[Request];
+JsonRpc.Call = JsonRpc[Call];
+
+Schema = Extension.LoadFunction("Schema.pqm");
+EnforceSchema.Strict = Schema[EnforceSchema.Strict];
+EnforceSchema.IgnoreExtraColumns = Schema[EnforceSchema.IgnoreExtraColumns];
+EnforceSchema.IgnoreMissingColumns = Schema[EnforceSchema.IgnoreMissingColumns];
+SchemaTransformTable = Schema[SchemaTransformTable];
+
+Table = Extension.LoadFunction("Table.pqm");
+Table.ToNavigationTable = Table[ToNavigationTable];
+Table.GenerateContainerLeaf = Table[GenerateContainerLeaf];
+
+Diagnostics = Extension.LoadFunction("Diagnostics.pqm");
+Diagnostics.LogValue = Diagnostics[LogValue];
+Diagnostics.LogFailure = Diagnostics[LogFailure];
+
+
 /**********************************************
  ******************** Odoo ********************
  **********************************************/
@@ -221,6 +252,15 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
         with_schema;
 
 
+// Like Odoo.Search but with query folding
+Odoo.Search.View = (connection as record, model as text, optional search_domain as list, 
+               optional params as record, optional set_schema as logical) =>
+    Table.View(null, [
+        GetType = () => Value.Type(GetRows()),
+        GetRows = () => Odoo.Search(connection, model, search_domain, params, set_schema)
+    ]);
+
+
 /*  Checks whether a user has a certain permission over a list of models.
  *  Returns the subset of `models` that the user indicated by `uid` has `permission` permission on.
  *  By default `permission` = "read" and `uid` = `connection[uid]`
@@ -364,7 +404,7 @@ SearchReadType = type function (
 Odoo.CreateFunctionsNavTable = (connection as record) =>
     let
         customQueryImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
-            Odoo.Search(connection, model, search_domain, params, set_schema),
+            Odoo.Search.View(connection, model, search_domain, params, set_schema),
         search_read = Value.ReplaceType(customQueryImpl, SearchReadType),
         fun_table =
             #table(
@@ -384,7 +424,7 @@ Odoo.CreateModelsNavTable = (connection as record) =>
                 Table.TransformRows(models, each {
                     [model], 
                     [name] & " (" & [model] & ")", 
-                    Table.GenerateContainerLeaf([model], [name],  Odoo.Search(connection, [model], {}, [])),
+                    Table.GenerateContainerLeaf([model], [name],  Odoo.Search.View(connection, [model], {}, [])),
                     "Table",
                     false
                 })
@@ -405,157 +445,3 @@ Odoo.CreateNavTable = (connection as record) =>
         navTable = Table.ToNavigationTable(master_table, {"Key"}, "Name", "Data", "ItemKind", "ItemKind", "IsLeaf")
     in
         navTable;
-
-
-/**************************************************
- ******************** JSON-RPC ********************
- **************************************************/
-
-/* Adapted from https://www.odoo.com/documentation/12.0/howtos/backend.html#json-rpc-library
- *
- * {"jsonrpc": "2.0",
- *  "method": method,
- *  "params": params,
- *  "id": 135468}
- */
-JsonRpc.Request = ( url as text, method as text, params as record ) =>
-    let
-        data = Json.FromValue([
-            jsonrpc = "2.0",
-            method = method,
-            params = params,
-            id = Number.RoundDown(Number.RandomBetween(0, 1000000000))
-        ]),
-        raw_response = Web.Contents(url, [ Content = data, Headers = [#"Content-Type" = "application/json"], Timeout = #duration(0, 0, 15, 0) ]),
-        response = Json.Document(raw_response),
-        result = 
-            if Record.HasFields(response, "error") then
-                error [
-                    
-                    Reason = response[#"error"][message], 
-                    Message = try response[#"error"][data][message] otherwise "JSON-RPC Error", 
-                    Detail = try response[#"error"][data][debug] otherwise Lines.FromBinary(raw_response,null,null,1252){0}
-                    /*
-                    Reason = try response[#"error"][message] & " (" & response[#"error"][data][message] & ")" otherwise response[#"error"][message], 
-                    Message = Lines.FromBinary(raw_response,null,null,1252){0}, 
-                    Detail = ""
-                    */
-                ]
-            else
-                response[result]
-    in
-        result;
-
-
-/* {"jsonrpc": "2.0",
- *  "method": "call",
- *  "params": {"service": service,
- *             "method": method,
- *             "args": args},
- *  "id": 135468}
- */
-JsonRpc.Call = (url as text, service as text, method as text, args) =>
-    JsonRpc.Request(url, "call", [service=service, method=method, args=args]);
-
-
-/****************************************************
- ******************** Nav Tables ********************
- ****************************************************/
-
-
-Table.ToNavigationTable = (
-    table as table,
-    keyColumns as list,
-    nameColumn as text,
-    dataColumn as text,
-    itemKindColumn as text,
-    itemNameColumn as text,
-    isLeafColumn as text
-) as table =>
-    let
-        tableType = Value.Type(table),
-        newTableType = Type.AddTableKey(tableType, keyColumns, true) meta 
-        [
-            NavigationTable.NameColumn = nameColumn, 
-            NavigationTable.DataColumn = dataColumn,
-            NavigationTable.ItemKindColumn = itemKindColumn, 
-            Preview.DelayColumn = itemNameColumn, 
-            NavigationTable.IsLeafColumn = isLeafColumn
-        ],
-        navigationTable = Value.ReplaceType(table, newTableType)
-    in
-        navigationTable;
-
-
-// Makes a navtable with a single entry
-Table.GenerateContainerLeaf = (Key as text, Name as text, Data, optional ItemKind as text, optional ItemName as text) as table => 
-    let
-        _ItemKind = if ItemKind <> null then ItemKind else "Table",
-        _ItemName = if ItemName <> null then ItemName else _ItemKind,
-        Table = #table({"Key", "Name", "Data", "ItemKind", "ItemName", "IsLeaf"}, {{Key, Name, Data, _ItemKind, _ItemName, true}}),
-        NavTable = Table.ToNavigationTable(Table, {"Key"}, "Name", "Data", "ItemKind", "ItemName", "IsLeaf")
-    in
-        NavTable;
-
-
-/************************************************
- ******************** Schema ********************
- ************************************************/
-
-
-EnforceSchema.Strict = 1;               // Add any missing columns, remove extra columns, set table type
-EnforceSchema.IgnoreExtraColumns = 2;   // Add missing columns, do not remove extra columns
-EnforceSchema.IgnoreMissingColumns = 3; // Do not add or remove columns
-
-SchemaTransformTable = (table as table, schema as table, optional enforceSchema as number) as table =>
-    let
-        // Default to EnforceSchema.Strict
-        _enforceSchema = if (enforceSchema <> null) then enforceSchema else EnforceSchema.Strict,
-
-        // Applies type transforms to a given table
-        EnforceTypes = (table as table, schema as table) as table =>
-            let
-                map = (t) => if Type.Is(t, type list) or Type.Is(t, type record) or t = type any then null else t,
-                mapped = Table.TransformColumns(schema, {"Type", map}),
-                omitted = Table.SelectRows(mapped, each [Type] <> null),
-                existingColumns = Table.ColumnNames(table),
-                removeMissing = Table.SelectRows(omitted, each List.Contains(existingColumns, [Name])),
-                primativeTransforms = Table.ToRows(removeMissing),
-                changedPrimatives = Table.TransformColumnTypes(table, primativeTransforms)
-            in
-                changedPrimatives,
-
-        // Returns the table type for a given schema
-        SchemaToTableType = (schema as table) as type =>
-            let
-                toList = List.Transform(schema[Type], (t) => [Type=t, Optional=false]),
-                toRecord = Record.FromList(toList, schema[Name]),
-                toType = Type.ForRecord(toRecord, false)
-            in
-                type table (toType),
-
-        // Determine if we have extra/missing columns.
-        // The enforceSchema parameter determines what we do about them.
-        schemaNames = schema[Name],
-        foundNames = Table.ColumnNames(table),
-        addNames = List.RemoveItems(schemaNames, foundNames),
-        extraNames = List.RemoveItems(foundNames, schemaNames),
-        tmp = Text.NewGuid(),
-        added = Table.AddColumn(table, tmp, each []),
-        expanded = Table.ExpandRecordColumn(added, tmp, addNames),
-        result = if List.IsEmpty(addNames) then table else expanded,
-        fullList =
-            if (_enforceSchema = EnforceSchema.Strict) then
-                schemaNames
-            else if (_enforceSchema = EnforceSchema.IgnoreMissingColumns) then
-                foundNames
-            else
-                schemaNames & extraNames,
-
-        // Select the final list of columns.
-        // These will be ordered according to the schema table.
-        reordered = Table.SelectColumns(result, fullList, MissingField.Ignore),
-        enforcedTypes = EnforceTypes(reordered, schema),
-        withType = if (_enforceSchema = EnforceSchema.Strict) then Value.ReplaceType(enforcedTypes, SchemaToTableType(schema)) else enforcedTypes
-    in
-        withType;
