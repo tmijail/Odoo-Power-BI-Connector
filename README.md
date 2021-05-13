@@ -6,7 +6,7 @@ Before this connector, the only way to query Odoo from Power BI was to connect d
 
 ## Install
 1. Create a `%USERPROFILE%\Documents\Power BI Desktop\Custom Connectors` directory.
-2. Copy `Odoo.mez` into that directory.
+2. Download [Odoo.mez](https://github.com/tmijail/Odoo-Power-BI-Connector/releases) and place it in that directory.
 3. Open Power BI Desktop and enable loading unsigned connectors (*File > Options and settings > Options > Security > Data Extensions > Allow any extension to load without warning or validation*)
 4. Restart Power BI Desktop
 
