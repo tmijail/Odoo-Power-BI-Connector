@@ -5,10 +5,12 @@ This project allows Power BI to query data from Odoo through the JsonRPC API.
 Before this connector, the only way to query Odoo from Power BI was to connect directly to the PostreSQL database. This is impossible if, for example, the Odoo instance is hosted on odoo.sh or on some other platform which doesn't expose the database to the internet.
 
 ## Install
-1. Create a `%USERPROFILE%\Documents\Power BI Desktop\Custom Connectors` directory.
+1. Create a `[Documents]\Power BI Desktop\Custom Connectors` directory.
 2. Download [Odoo.mez](https://github.com/tmijail/Odoo-Power-BI-Connector/releases) and place it in that directory.
 3. Open Power BI Desktop and enable loading unsigned connectors (*File > Options and settings > Options > Security > Data Extensions > Allow any extension to load without warning or validation*)
 4. Restart Power BI Desktop
+
+Read the [PBI documentation](https://learn.microsoft.com/power-bi/connect-data/desktop-connector-extensibility#data-extension-security) if you have any trouble.
 
 ## Use
 
