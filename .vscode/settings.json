@@ -1,0 +1,5 @@
+{
+  "powerquery.sdk.defaultQueryFile": "${workspaceFolder}\\Odoo.query.pq",
+  "powerquery.sdk.defaultExtension": "${workspaceFolder}\\bin\\AnyCPU\\Debug\\Odoo.mez",
+  "powerquery.general.mode": "SDK"
+}
