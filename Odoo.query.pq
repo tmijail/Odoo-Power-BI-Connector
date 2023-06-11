@@ -1,4 +1,4 @@
-﻿section OdooUnitTests;
+section OdooUnitTests;
 
 shared Odoo.UnitTest =
 [

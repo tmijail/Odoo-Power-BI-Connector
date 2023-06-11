@@ -1,0 +1,31 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build",
+			"type": "powerquery",
+			"operation": "compile",
+			"group": "build",
+			"additionalArgs": ["-t", "Odoo"],
+			"problemMatcher": []
+		},
+		{
+			"label": "Copy to Custom Connectors folder",
+			"type": "shell",
+			"command": "cp .\\bin\\AnyCPU\\Debug\\Odoo.mez $(Join-Path $([environment]::getfolderpath('mydocuments')) 'Power BI Desktop' 'Custom Connectors')",
+			"problemMatcher": []
+		},
+		{
+			"label": "Build and copy to Customs Connectors folder",
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			},
+			"dependsOn": [
+				"Build",
+				"Copy to Custom Connectors folder"
+			],
+			"dependsOrder": "sequence"
+		}
+	]
+}
