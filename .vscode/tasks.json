@@ -6,6 +6,7 @@
 			"type": "powerquery",
 			"operation": "compile",
 			"group": "build",
+			"additionalArgs": ["-t", "Odoo"],
 			"problemMatcher": []
 		},
 		{
