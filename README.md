@@ -4,7 +4,7 @@ This project allows Power BI to query data from Odoo through the JsonRPC API.
 
 Before this connector, the only way to query Odoo from Power BI was to connect directly to the PostreSQL database. This is impossible if, for example, the Odoo instance is hosted on odoo.sh or on some other platform which doesn't expose the database to the internet.
 
-## Install
+## Installation
 1. Create a `[Documents]\Power BI Desktop\Custom Connectors` directory.
 2. Download [Odoo.mez](https://github.com/tmijail/Odoo-Power-BI-Connector/releases) and place it in that directory.
 3. Open Power BI Desktop and enable loading unsigned connectors (*File > Options and settings > Options > Security > Data Extensions > Allow any extension to load without warning or validation*)
@@ -12,7 +12,7 @@ Before this connector, the only way to query Odoo from Power BI was to connect d
 
 Read the [PBI documentation](https://learn.microsoft.com/power-bi/connect-data/desktop-connector-extensibility#data-extension-security) if you have any trouble.
 
-## Use
+## Usage
 
 Currently a big limitation of this connector is that it doesn't support query folding. This means that if you load a table and filter it through the Power Query Editor UI, Power BI will download the whole table and then filter it locally instead of sending the filter definition to the server and downloading just the needed columns and rows. This is inefficient at best and can lead to an `Odoo Server Error: Out of memory exception` at worst.
 
@@ -85,16 +85,17 @@ search_read(
 | nicole.ford75@example.com     | Nicole Ford     | 27 |
 
 
-## Build
-1. Install Visual Studio
-2. Install the [Power Query SDK](https://marketplace.visualstudio.com/items?itemName=Dakahn.PowerQuerySDK)
-3. Clone this repository and open `Odoo.sln`
-4. *Optional:* Install and configure the [Auto Deploy](https://marketplace.visualstudio.com/items?itemName=lennyomg.AutoDeploy) extension to copy `Odoo.mez` to `%USERPROFILE%\Documents\Power BI Desktop\Custom Connectors` after every build.
-5. Compile (*Build > Build Solution / Ctrl+Shift+B*)
+## Development
 
-## Tests
-Unit tests can be executed by pressing *Start* on the Visual Studio toolbar or by pressing *F5*. 
+### Build
+1. Install Visual Studio Code
+2. Install the [Power Query SDK](https://marketplace.visualstudio.com/items?itemName=PowerQuery.vscode-powerquery-sdk) VS Code extension
+3. Clone this repository and open it in VS Code
+5. Compile and install (*Terminal > Run Task > Build and copy to Customs Connectors folder / Ctrl+Shift+B*)
 
-By default the unit tests assume there's a non-empty Odoo instance running at http://localhost:8069 with a database named `db`. A `docker-compose.yml` file is provided to easily set up such an instance. Just execute `docker-compose up`, wait a bit, go to http://localhost:8069 and set up the database with sample data.
+Alternativelly, you can just compress the repository to a `.zip` file and then change the extension to `.mez`.
 
-If you want to use some other server for the tests, simply edit `test-server.json`.
+### Test
+By default the unit tests assume there's a non-empty Odoo instance running at http://localhost:8069 with a database named `db`. A `docker-compose.yml` file is provided to easily set up such an instance. Just execute `docker-compose up`, wait a bit, go to http://localhost:8069 and set up the database with sample data. If you want to use some other server for the tests, edit `test-server.json`.
+
+Once that server is reachable, press `Set credential` in the Power Query SDK sidebar and enter your Odoo test db username and password. Then open `Odoo.query.pq` and press `Evaluate current file` (also in the PQ SDK sidebar).
