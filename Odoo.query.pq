@@ -13,11 +13,45 @@ shared Odoo.UnitTest =
     // <Expected Value> and <Actual Value> can be a literal or let statement
     facts =
     {
-        Fact("Check that we have more than one entry in our nav table", try true, try Table.RowCount(root) > 1),
-        Fact("Check that we have more than one entry in our 'Tables' nav table", try true, try Table.RowCount(root{[Key="Tables"]}[Data]) > 1),
-        Fact("Check that we can query 'res.partner' through search_read", try true, try not Table.IsEmpty(resUser)),
-        Fact("Check that the schema for 'res.partner' is set", try true, try List.Distinct(Table.Column(Type.TableSchema(Value.Type(resUser)), "TypeName")) <> {"Any.Type"}),
-        Fact("Check that we can navigate to 'res.partner' from the nav table", try true, try not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.users"]}[Data]{[Key="res.users"]}[Data]))
+        Fact(
+            "Check that we have more than one entry in our nav table", 
+            try true, 
+            try Table.RowCount(root) > 1
+        ),
+        Fact(
+            "Check that we have more than one entry in our 'Tables' nav table", 
+            try true, 
+            try Table.RowCount(root{[Key="Tables"]}[Data]) > 1
+        ),
+        Fact(
+            "Check that we can query 'res.partner' through search_read", 
+            try true, 
+            try not Table.IsEmpty(resUser)
+        ),
+        Fact(
+            "Check that the schema for 'res.partner' is set", 
+            try true, 
+            try List.Distinct(Table.Column(Type.TableSchema(Value.Type(resUser)), "TypeName")) <> {"Any.Type"}
+        ),
+        Fact(
+            "Check that we can navigate to 'res.partner' from the nav table", 
+            try true, 
+            try not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.users"]}[Data]{[Key="res.users"]}[Data])
+        ),
+        Fact(
+            "Check that non 'store' fields aren't queried when no fields are specified", 
+            try true, 
+            try not List.Contains(
+                Table.ColumnNames(resUser),
+                "__last_update")
+        ),
+        Fact(
+            "Check that 'store' fields can be queried when specified", 
+            try true, 
+            try List.Contains(
+                Table.ColumnNames(search_read("res.partner", {}, [limit=1, fields={"__last_update"}])),
+                "__last_update")
+        )
     },
 
     report = Facts.Summarize(facts)
