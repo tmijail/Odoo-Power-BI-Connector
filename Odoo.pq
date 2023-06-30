@@ -313,7 +313,8 @@ Odoo.TypeTranslations = [
     #"datetime" = type datetime,
     many2one = type list,
     one2many = type record,
-    many2many = type list
+    many2many = type list,
+    selection = Int64.Type
 ];
 
 
