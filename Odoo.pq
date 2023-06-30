@@ -197,9 +197,9 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
 
         schema = Odoo.Schema(connection, model, params),
 
-        // If we don't specify which fields we want to read and the model has one2many fields
-        // we first check that we can read the models which those fields reference.
-        // We ignore the fields which reference models we can't read.
+        // If we don't specify which fields we want to read, we only query `store` fields.
+        // Also, if the model has one2many fields we first check that we can read the 
+        // models which those fields reference. We ignore the fields which reference models we can't read.
         fields = if _params <> []
                  then Record.FieldOrDefault(params, "fields", null)
                  else null,
@@ -209,7 +209,7 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
                   then Table.SelectRows(
                            schema, 
                            each not ( [type] = "one2many" and 
-                                      not List.Contains(models_we_can_read, [relation]) ))
+                                      not List.Contains(models_we_can_read, [relation]) ) and [store] = true )
                   else schema,
 
         _params2 = if fields = null and _set_schema
@@ -235,8 +235,10 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
 
         list_to_record_map = (x) => if (x <> null) then [id=x{0}, name=x{1}] else null,
         columns_to_map_over = Table.RemoveColumns(
-            Table.SelectRows(schema2, each ([type] = "many2one")),
-            {"type", "relation", "Type"}),
+            Table.SelectRows(
+                schema2, 
+                each ([type] = "many2one")),
+            {"type", "relation", "Type", "store"}),
         transform_operations = Table.ToRows(Table.AddColumn(columns_to_map_over, "Transform", each list_to_record_map)),
         with_o2m_as_records = 
             if (List.IsEmpty(transform_operations) or Table.ColumnCount(result) = 0) then
@@ -331,8 +333,8 @@ Odoo.TranslateType = (OdooType as text, required as nullable logical) =>
 
 Odoo._Schema = (connection as record, model as text, optional fields as nullable list) as table =>
     let 
-        fields_details = Odoo.FieldsGet(connection, model, fields, {"type", "required", "relation"}),
-        fields_details_table = Table.ExpandRecordColumn(Record.ToTable(fields_details), "Value", {"required", "type", "relation"}),
+        fields_details = Odoo.FieldsGet(connection, model, fields, {"type", "required", "relation", "store"}),
+        fields_details_table = Table.ExpandRecordColumn(Record.ToTable(fields_details), "Value", {"required", "type", "relation", "store"}),
 
         with_type = Table.AddColumn(fields_details_table, "Type", each Odoo.TranslateType([type], [required])),
         removed_cols = Table.RemoveColumns(with_type, {"required"})
