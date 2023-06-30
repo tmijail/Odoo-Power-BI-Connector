@@ -15,9 +15,9 @@ shared Odoo.UnitTest =
     {
         Fact("Check that we have more than one entry in our nav table", try true, try Table.RowCount(root) > 1),
         Fact("Check that we have more than one entry in our 'Tables' nav table", try true, try Table.RowCount(root{[Key="Tables"]}[Data]) > 1),
-        Fact("Check that we can query 'res.users' through search_read", try true, try not Table.IsEmpty(resUser)),
-        Fact("Check that the schema for 'res.users' is set", try true, try List.Distinct(Table.Column(Type.TableSchema(Value.Type(resUser)), "TypeName")) <> {"Any.Type"}),
-        Fact("Check that we can navigate to 'res.users' from the nav table", try true, try not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.users"]}[Data]{[Key="res.users"]}[Data]))
+        Fact("Check that we can query 'res.partner' through search_read", try true, try not Table.IsEmpty(resUser)),
+        Fact("Check that the schema for 'res.partner' is set", try true, try List.Distinct(Table.Column(Type.TableSchema(Value.Type(resUser)), "TypeName")) <> {"Any.Type"}),
+        Fact("Check that we can navigate to 'res.partner' from the nav table", try true, try not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.users"]}[Data]{[Key="res.users"]}[Data]))
     },
 
     report = Facts.Summarize(facts)
