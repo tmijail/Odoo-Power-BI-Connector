@@ -239,7 +239,7 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
             {"type", "relation", "Type"}),
         transform_operations = Table.ToRows(Table.AddColumn(columns_to_map_over, "Transform", each list_to_record_map)),
         with_o2m_as_records = 
-            if (List.IsEmpty(transform_operations)) then
+            if (List.IsEmpty(transform_operations) or Table.ColumnCount(result) = 0) then
                 replace_false_with_null
             else
                 Table.TransformColumns(replace_false_with_null, transform_operations),
@@ -352,7 +352,7 @@ Odoo.Schema = (connection as record, model as text, optional params as nullable 
 
 Odoo.SetSchema = (connection as record, table as table, schema as table, optional enforceSchema as number) as table =>
     let
-        _enforceSchema = if enforceSchema <> null then enforceSchema else 2,
+        _enforceSchema = if enforceSchema <> null then enforceSchema else EnforceSchema.IgnoreExtraColumns,
         only_PBI_schema = Table.SelectColumns(schema, {"Name", "Type"}), // Just the columns relevant to the PowerBI schema
         with_schema = SchemaTransformTable(table, only_PBI_schema, _enforceSchema)
     in
