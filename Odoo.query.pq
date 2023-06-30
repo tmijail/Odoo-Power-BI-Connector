@@ -7,17 +7,17 @@ shared Odoo.UnitTest =
     db = Odoo.TestServer[db],
     root = Odoo.Contents(url, db),
     search_read = root{[Key="Functions"]}[Data]{[Function="search_read"]}[Data],
-    resPartner = search_read("res.partner", {}, [limit=10]),
+    resUser = search_read("res.partner", {}, [limit=10]),
 
     // Fact(<Name of the Test>, <Expected Value>, <Actual Value>)
     // <Expected Value> and <Actual Value> can be a literal or let statement
     facts =
     {
-        Fact("Check that we have more than one entry in our nav table", true, Table.RowCount(root) > 1),
-        Fact("Check that we have more than one entry in our 'Tables' nav table", true, Table.RowCount(root{[Key="Tables"]}[Data]) > 1),
-        Fact("Check that we can query 'res.partner' through search_read", true, not Table.IsEmpty(resPartner)),
-        Fact("Check that the schema for 'res.partner' is set", true, List.Distinct(Table.Column(Type.TableSchema(Value.Type(resPartner)), "TypeName")) <> {"Any.Type"}),
-        Fact("Check that we can navigate to 'res.partner' from the nav table", true, not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.partner"]}[Data]{[Key="res.partner"]}[Data]))
+        Fact("Check that we have more than one entry in our nav table", try true, try Table.RowCount(root) > 1),
+        Fact("Check that we have more than one entry in our 'Tables' nav table", try true, try Table.RowCount(root{[Key="Tables"]}[Data]) > 1),
+        Fact("Check that we can query 'res.users' through search_read", try true, try not Table.IsEmpty(resUser)),
+        Fact("Check that the schema for 'res.users' is set", try true, try List.Distinct(Table.Column(Type.TableSchema(Value.Type(resUser)), "TypeName")) <> {"Any.Type"}),
+        Fact("Check that we can navigate to 'res.users' from the nav table", try true, try not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.users"]}[Data]{[Key="res.users"]}[Data]))
     },
 
     report = Facts.Summarize(facts)
@@ -26,9 +26,9 @@ shared Odoo.UnitTest =
 
 /// COMMON UNIT TESTING CODE 
 Fact = (_subject as text, _expected, _actual) as record =>
-[   expected = try _expected,
+[   expected = _expected,
     safeExpected = if expected[HasError] then "Expected : "& @ValueToText(expected[Error]) else expected[Value],
-    actual = try _actual,
+    actual = _actual,
     safeActual = if actual[HasError] then "Actual : "& @ValueToText(actual[Error]) else actual[Value],
     attempt = try safeExpected = safeActual,
     result = if attempt[HasError] or not attempt[Value] then "Failure ⛔" else "Success ✓",
