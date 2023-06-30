@@ -275,7 +275,7 @@ Odoo.CheckPermissions = (connection as record, models as list, optional uid as n
             "ir.model.access", 
             { {permission_field, "=", true},
               {"model_id.model", "in", models},
-              {"group_id.users", "=", _uid} },
+              "|", {"group_id.users", "=", _uid}, {"group_id", "=", false} },
             {},
             {"model_id"}),
         ids = List.Transform(models_with_perm[model_id], List.First),
