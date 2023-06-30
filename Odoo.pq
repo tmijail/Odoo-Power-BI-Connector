@@ -1,4 +1,4 @@
-[Version = "0.1.0"]
+[Version = "0.2.0"]
 section Odoo;
 
 shared Odoo.TestServer = Json.Document(Text.FromBinary(Extension.Contents("test-server.json")));
