@@ -314,7 +314,7 @@ Odoo.TypeTranslations = [
     many2one = type list,
     one2many = type record,
     many2many = type list,
-    selection = Int64.Type
+    selection = type text
 ];
 
 
