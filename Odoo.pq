@@ -275,10 +275,11 @@ Odoo.CheckPermissions = (connection as record, models as list, optional uid as n
             "ir.model.access", 
             { {permission_field, "=", true},
               {"model_id.model", "in", models},
-              {"group_id.users", "child_of", _uid} },
+              {"group_id.users", "=", _uid} },
             {},
             {"model_id"}),
         ids = List.Transform(models_with_perm[model_id], List.First),
+        // TODO: cache 'ir.model' globally to avoid this call
         model_names = if List.Count(models) <> 0 // Shortcut
                       then Odoo._Search(connection, "ir.model", {{"id", "in", ids}}, [fields={"model"}])[model]
                       else {}
