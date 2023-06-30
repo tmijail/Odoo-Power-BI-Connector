@@ -318,10 +318,13 @@ Odoo.TypeTranslations = [
 ];
 
 
-Odoo.TranslateType = (OdooType as text, required as logical) =>
+Odoo.TranslateType = (OdooType as text, required as nullable logical) =>
     let
         _MLanguageType = Record.FieldOrDefault(Odoo.TypeTranslations, OdooType, type any),
-        MLanguageType  = if required then _MLanguageType else type nullable _MLanguageType
+        _required = if required <> null
+                    then required
+                    else false,
+        MLanguageType  = if _required then _MLanguageType else type nullable _MLanguageType
     in
         MLanguageType;
 
