@@ -74,6 +74,7 @@ Table.GenerateContainerLeaf = Table[GenerateContainerLeaf];
 Diagnostics = Extension.LoadFunction("Diagnostics.pqm");
 Diagnostics.LogValue = Diagnostics[LogValue];
 Diagnostics.LogFailure = Diagnostics[LogFailure];
+Diagnostics.WrapHandlers = Diagnostics[WrapHandlers];
 
 
 /**********************************************
@@ -249,18 +250,59 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
         
         with_schema = if _set_schema 
                       then Odoo.SetSchema(connection, with_o2m_as_records, schema2) 
-                      else result
+                      else result,
+        
+        reordered_columns = if fields = null
+                            then with_schema
+                            else Table.ReorderColumns(with_schema, fields)
     in
-        with_schema;
+        reordered_columns;
 
 
 // Like Odoo.Search but with query folding
 Odoo.Search.View = (connection as record, model as text, optional search_domain as list, 
                optional params as record, optional set_schema as logical) =>
-    Table.View(null, [
-        GetType = () => Value.Type(GetRows()),
-        GetRows = () => Odoo.Search(connection, model, search_domain, params, set_schema)
-    ]);
+    let
+        _search_domain = if search_domain <> null then search_domain else {},
+        _params = if params <> null then params else [],
+        View = (optional sd as list, optional p as record) => Table.View(null, Diagnostics.WrapHandlers([
+            GetType = () => Value.Type(GetRows()), // TODO: refactor schema logic
+            GetRows = () => Odoo.Search(connection, model, sd, p, set_schema),
+            OnTake = (count as number) =>
+                let
+                    newParams = p & [ limit = count ]
+                in
+                    @View(sd, newParams),
+            OnSkip = (count as number) =>
+                let
+                    newParams = p & [ offset = count ]
+                in
+                    @View(sd, newParams),
+            OnSelectColumns = (columns as list) =>
+                let
+                    newParams = p & [ fields = columns ]
+                in
+                   @View(sd, newParams),
+            OnSort = (order as list) =>
+                let
+                    // This will convert the list of records to a list of text,
+                    // where each entry is "<columnName> <asc|desc>"
+                    sorting = List.Transform(order, (o) => 
+                        let
+                            column = o[Name],
+                            order = o[Order],
+                            orderText = if (order = Order.Ascending) then "asc" else "desc"
+                        in
+                            column & " " & orderText
+                    ),
+                    orderBy = Text.Combine(sorting, ", "),
+                    newParams = p & [ order = orderBy ]
+                in
+                    @View(sd, newParams)
+        ]))
+    in
+        View(_search_domain, _params);
+    
 
 
 /*  Checks whether a user has a certain permission over a list of models.

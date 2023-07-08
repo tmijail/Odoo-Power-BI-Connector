@@ -6,8 +6,16 @@ shared Odoo.UnitTest =
     url = Odoo.TestServer[url],
     db = Odoo.TestServer[db],
     root = Odoo.Contents(url, db),
+    resPartnerNavTable = root{[Key="Tables"]}[Data]{[Model="res.partner"]}[Data]{[Key="res.partner"]}[Data],
     search_read = root{[Key="Functions"]}[Data]{[Function="search_read"]}[Data],
-    resUser = search_read("res.partner", {}, [limit=10]),
+    resPartnerLimit = search_read("res.partner", {}, [limit=3]),
+    resPartnerLimitOffset = search_read("res.partner", {}, [limit=3, offset=5]),
+    resPartnerLimitSort = search_read("res.partner", {}, [limit=3, order="name desc, company_name"]),
+    resPartnerLimitFields = search_read("res.partner", {}, [limit=3, fields={"id", "name"}]),
+    resPartnerLimitFieldsReordered = Table.ReorderColumns(
+        resPartnerLimitFields, 
+        {Table.ColumnNames(resPartnerLimitFields){1}, Table.ColumnNames(resPartnerLimitFields){0}}),
+    
 
     // Fact(<Name of the Test>, <Expected Value>, <Actual Value>)
     // <Expected Value> and <Actual Value> can be a literal or let statement
@@ -26,23 +34,23 @@ shared Odoo.UnitTest =
         Fact(
             "Check that we can query 'res.partner' through search_read", 
             try true, 
-            try not Table.IsEmpty(resUser)
+            try not Table.IsEmpty(resPartnerLimit)
         ),
         Fact(
             "Check that the schema for 'res.partner' is set", 
             try true, 
-            try List.Distinct(Table.Column(Type.TableSchema(Value.Type(resUser)), "TypeName")) <> {"Any.Type"}
+            try List.Distinct(Table.Column(Type.TableSchema(Value.Type(resPartnerLimit)), "TypeName")) <> {"Any.Type"}
         ),
         Fact(
             "Check that we can navigate to 'res.partner' from the nav table", 
             try true, 
-            try not Table.IsEmpty(root{[Key="Tables"]}[Data]{[Model="res.users"]}[Data]{[Key="res.users"]}[Data])
+            try not Table.IsEmpty(resPartnerNavTable)
         ),
         Fact(
             "Check that non 'store' fields aren't queried when no fields are specified", 
             try true, 
             try not List.Contains(
-                Table.ColumnNames(resUser),
+                Table.ColumnNames(resPartnerLimit),
                 "__last_update")
         ),
         Fact(
@@ -51,12 +59,34 @@ shared Odoo.UnitTest =
             try List.Contains(
                 Table.ColumnNames(search_read("res.partner", {}, [limit=1, fields={"__last_update"}])),
                 "__last_update")
+        ),
+        Fact(
+            "Check query folding OnTake", 
+            try resPartnerLimit, 
+            try  Table.FirstN(resPartnerNavTable, 3)
+        ),
+        Fact(
+            "Check query folding OnSkip and OnTake", 
+            try resPartnerLimitOffset, 
+            try Table.FirstN(Table.Skip(resPartnerNavTable, 5), 3)
+        ),
+        Fact(
+            "Check query folding OnSelectColumns and OnTake", 
+            try resPartnerLimitFields, 
+            try Table.FirstN(Table.SelectColumns(resPartnerNavTable, {"id", "name"}), 3)
+        ),
+        Fact(
+            "Check query folding OnSort and OnTake", 
+            try resPartnerLimitSort, 
+            try Table.FirstN(Table.Sort(resPartnerNavTable, {{"name", Order.Descending}, {"company_name", Order.Ascending}}), 3)
         )
     },
 
     report = Facts.Summarize(facts)
 ][report];
 
+
+GetNColumn = (t as table, n as number) => Table.Column(t, Table.ColumnNames(t){n});
 
 /// COMMON UNIT TESTING CODE 
 Fact = (_subject as text, _expected, _actual) as record =>
