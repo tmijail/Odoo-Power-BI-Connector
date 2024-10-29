@@ -12,7 +12,7 @@
 		{
 			"label": "Copy to Custom Connectors folder",
 			"type": "shell",
-			"command": "cp .\\bin\\AnyCPU\\Debug\\Odoo.mez $(Join-Path $([environment]::getfolderpath('mydocuments')) 'Power BI Desktop' 'Custom Connectors')",
+			"command": "cp .\\bin\\AnyCPU\\Debug\\Odoo.mez $(Join-Path $([environment]::getfolderpath('mydocuments')) $(Join-Path 'Power BI Desktop' 'Custom Connectors'))",
 			"problemMatcher": []
 		},
 		{
