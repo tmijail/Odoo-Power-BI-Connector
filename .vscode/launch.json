@@ -8,7 +8,8 @@
             "type": "powerquery",
             "request": "launch",
             "name": "Evaluate power query file.",
-            "program": "${workspaceFolder}/Odoo.query.pq"
+            "program": "${workspaceFolder}/Odoo.query.pq",
+            "additionalArgs": ["--failOnFoldingFailure"]
         }
     ]
 }
