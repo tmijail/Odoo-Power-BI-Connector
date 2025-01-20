@@ -108,7 +108,7 @@ Diagnostics.WrapHandlers = Diagnostics[WrapHandlers];
 // Finds the uid of the Odoo User and saves all the information needed to connect to the db in the `connection` record.
 Odoo.Login = (url as text, db as text) as record =>
     let
-        uid = Odoo.GetUID(url, db),
+        uid = Diagnostics.LogValue("Logging in as UID", Odoo.GetUID(url, db)),
         connection = [url = url,
                       db = db,
                       uid = uid]

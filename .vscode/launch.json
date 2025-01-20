@@ -9,7 +9,10 @@
             "request": "launch",
             "name": "Evaluate power query file.",
             "program": "${workspaceFolder}/Odoo.query.pq",
-            "additionalArgs": ["--failOnFoldingFailure"]
+            "additionalArgs": [
+                "--failOnFoldingFailure", 
+                "-l", "user",
+            ]
         }
     ]
 }
