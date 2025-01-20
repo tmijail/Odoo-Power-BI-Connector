@@ -79,6 +79,11 @@ shared Odoo.UnitTest =
             "Check query folding OnSort and OnTake", 
             try resPartnerLimitSort, 
             try Table.FirstN(Table.Sort(resPartnerNavTable, {{"name", Order.Descending}, {"company_name", Order.Ascending}}), 3)
+        ),
+        Fact(
+            "Check query folding GetRowCount", 
+            try 3, 
+            try Table.RowCount(resPartnerLimit)
         )
     },
 
