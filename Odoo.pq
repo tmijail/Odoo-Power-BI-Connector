@@ -50,12 +50,20 @@ Odoo.Icons = [
  ************************************************/
 
 
-Extension.LoadFunction = (name as text) =>
-    let
-        binary = Extension.Contents(name),
-        asText = Text.FromBinary(binary)
-    in
-        Expression.Evaluate(asText, #shared);
+Extension.LoadFunction = (fileName as text) =>
+  let
+      binary = Extension.Contents(fileName),
+      asText = Text.FromBinary(binary)
+  in
+      try
+        Expression.Evaluate(asText, #shared)
+      catch (e) =>
+        error [
+            Reason = "Extension.LoadFunction Failure",
+            Message.Format = "Loading '#{0}' failed - '#{1}': '#{2}'",
+            Message.Parameters = {fileName, e[Reason], e[Message]},
+            Detail = [File = fileName, Error = e]
+        ];
 
 JsonRpc = Extension.LoadFunction("JsonRpc.pqm");
 JsonRpc.Request = JsonRpc[Request];
