@@ -60,6 +60,8 @@ shared Odoo.UnitTest =
                 Table.ColumnNames(search_read("res.partner", {}, [limit=1, fields={"__last_update"}])),
                 "__last_update")
         ),
+        // Important for query preview, where we might specify a limit, but PBI also tries to set a 1000 row limit for performance.
+        // In this case, we take the mimimum between the limit we specify and the limit PBI specifies.
         Fact(
             "Check successive OnTakes apply the minimum limit value", 
             try 3, 
