@@ -22,7 +22,7 @@ Because of this, the current recommended way to get data is through the `search_
 
 ### search_read
 
-`search_read` allows us to query an Odoo model. For more information see the [Odoo documentation](https://www.odoo.com/documentation/master/webservices/odoo.html#search-and-read). 
+`search_read` allows us to query an Odoo model. For more information see the [Odoo documentation](https://www.odoo.com/documentation/18.0/developer/reference/external_api.html?highlight=search_read#search-and-read). 
 
 ```M
 search_read(

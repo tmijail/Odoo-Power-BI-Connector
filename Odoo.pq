@@ -441,7 +441,7 @@ SearchReadType = type function (
     ]))
     as table meta [
         Documentation.Name = "search_read",
-        Documentation.LongDescription = "Queries an Odoo model. See https://www.odoo.com/documentation/master/webservices/odoo.html#search-and-read",
+        Documentation.LongDescription = "Queries an Odoo model. See https://www.odoo.com/documentation/18.0/developer/reference/external_api.html?highlight=search_read#search-and-read",
         Documentation.Examples = {[
             Description = "Get the names and emails of our contacts at Azure Interior.",
             Code = 
