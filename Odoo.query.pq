@@ -61,6 +61,11 @@ shared Odoo.UnitTest =
                 "__last_update")
         ),
         Fact(
+            "Check successive OnTakes apply the minimum limit value", 
+            try 3, 
+            try  Table.RowCount(Table.FirstN(resPartnerLimit, 10))
+        ),
+        Fact(
             "Check query folding OnTake", 
             try resPartnerLimit, 
             try  Table.FirstN(resPartnerNavTable, 3)

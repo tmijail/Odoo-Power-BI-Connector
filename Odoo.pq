@@ -278,7 +278,9 @@ Odoo.Search.View = (connection as record, model as text, optional search_domain 
             GetRows = () => Odoo.Search(connection, model, sd, p, set_schema),
             OnTake = (count as number) =>
                 let
-                    newParams = p & [ limit = count ]
+                    currentLimit = Record.FieldOrDefault(p, "limit", false),
+                    newLimit = if currentLimit = false then count else List.Min({currentLimit, count}),
+                    newParams = p & [ limit = newLimit ]
                 in
                     @View(sd, newParams),
             OnSkip = (count as number) =>
