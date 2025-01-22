@@ -412,6 +412,61 @@ Odoo.SetSchema = (connection as record, table as table, schema as table, optiona
     in
         with_schema;
 
+/* Searches for records based on the `search_domain` (https://www.odoo.com/documentation/master/reference/orm.html#reference-orm-domains)
+ * and returns the number it found. Leave the search_domain as an empty list to count all records.
+ *
+ * Example:
+ *     Odoo.SearchCount(connection, "account.invoice", {{"state", "=", "paid"}, {"date", ">", "2019-06-15"}}, 10)
+ */
+Odoo.SearchCount = (connection as record, model as text, optional search_domain as list, 
+               optional limit as nullable number) =>
+    let
+        _search_domain = if search_domain <> null then search_domain else {},
+        params = if limit <> null then [limit = Number.Round(limit, 0, RoundingMode.Down)] else [],
+        result = Odoo.ExecuteKW(
+            connection, 
+            model, 
+            "search_count", 
+            { _search_domain }, 
+            params
+        )
+
+    in
+        result;
+
+SearchCountType = type function (
+    model as (type text meta [
+        Documentation.FieldCaption = "Model",
+        Documentation.FieldDescription = "Technical name of the model to query",
+        Documentation.SampleValues = {"res.partner", "account.invoice"}
+    ]),
+    optional search_domain as (type nullable list meta [
+        Documentation.FieldCaption = "Search domain",
+        Documentation.FieldDescription = "See https://www.odoo.com/documentation/master/reference/orm.html#reference-orm-domains",
+        Documentation.SampleValues = {"{{""name"", ""ilike"", ""dave""}, {""customer"", ""="", true}}", "account.invoice"},
+        Formatting.IsMultiLine = true,
+        Formatting.IsCode = true
+    ]),
+    optional limit as (type nullable number meta [
+        Documentation.FieldCaption = "Limit ",
+        Documentation.FieldDescription = "Maximum number of record to count (upperbound). Defaults to all",
+        Documentation.SampleValues = {"10", "null"},
+        Formatting.IsMultiLine = false,
+        Formatting.IsCode = false
+    ]))
+    as table meta [
+        Documentation.Name = "search_count",
+        Documentation.LongDescription = "Counts the number of records of a given model which satisfy a given search_domain. See https://www.odoo.com/documentation/18.0/developer/reference/backend/orm.html#odoo.models.Model.search_count",
+        Documentation.Examples = {[
+            Description = "Get the number of products we sell.",
+            Code = 
+"search_count(
+    ""product.template"", 
+    { {""sale_ok"", ""="", true} }
+)",
+            Result = "100"
+        ]}
+    ];
 
 SearchReadType = type function (
     model as (type text meta [
@@ -462,13 +517,21 @@ SearchReadType = type function (
 
 Odoo.CreateFunctionsNavTable = (connection as record) =>
     let
-        customQueryImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
+        searchReadImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
             Odoo.Search.View(connection, model, search_domain, params, set_schema),
-        search_read = Value.ReplaceType(customQueryImpl, SearchReadType),
+        search_read = Value.ReplaceType(searchReadImpl, SearchReadType),
+        
+        searchCountImpl = (model as text, optional search_domain as nullable list, optional limit as nullable number) =>
+            Odoo.SearchCount(connection, model, search_domain, limit),
+        search_count = Value.ReplaceType(searchCountImpl, SearchCountType),
+
         fun_table =
             #table(
                 { "Function",    "Name",        "Data",      "ItemKind", "IsLeaf"}, 
-                {{"search_read", "search_read", search_read, "Function", "Function"}}
+                {
+                    {"search_read", "search_read", search_read, "Function", "Function"},
+                    {"search_count", "search_count", search_count, "Function", "Function"}
+                }
             ),
         navTable = Table.ToNavigationTable(fun_table, {"Function"}, "Name", "Data", "ItemKind", "ItemKind", "IsLeaf")
     in

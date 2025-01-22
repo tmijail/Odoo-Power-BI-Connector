@@ -8,6 +8,8 @@ shared Odoo.UnitTest =
     root = Odoo.Contents(url, db),
     resPartnerNavTable = root{[Key="Tables"]}[Data]{[Model="res.partner"]}[Data]{[Key="res.partner"]}[Data],
     search_read = root{[Key="Functions"]}[Data]{[Function="search_read"]}[Data],
+    search_count = root{[Key="Functions"]}[Data]{[Function="search_count"]}[Data],
+    resPartner = search_read("res.partner"),
     resPartnerLimit = search_read("res.partner", {}, [limit=3]),
     resPartnerLimitOffset = search_read("res.partner", {}, [limit=3, offset=5]),
     resPartnerLimitSort = search_read("res.partner", {}, [limit=3, order="name desc, company_name"]),
@@ -15,6 +17,8 @@ shared Odoo.UnitTest =
     resPartnerLimitFieldsReordered = Table.ReorderColumns(
         resPartnerLimitFields, 
         {Table.ColumnNames(resPartnerLimitFields){1}, Table.ColumnNames(resPartnerLimitFields){0}}),
+    resPartnerCount = search_count("res.partner", {}),
+    resPartnerCountLimit = search_count("res.partner", {}, 3),
     
 
     // Fact(<Name of the Test>, <Expected Value>, <Actual Value>)
@@ -91,6 +95,16 @@ shared Odoo.UnitTest =
             "Check query folding GetRowCount", 
             try 3, 
             try Table.RowCount(resPartnerLimit)
+        ),
+        Fact(
+            "Check search_count", 
+            try 3, 
+            try resPartnerCountLimit
+        ),
+        Fact(
+            "Check search_count(...) == Table.RowCount(search_read(...))", 
+            try resPartnerCount, 
+            try Table.RowCount(resPartner)
         )
     },
 
