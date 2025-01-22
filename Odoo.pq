@@ -274,7 +274,13 @@ Odoo.Search.View = (connection as record, model as text, optional search_domain 
         _search_domain = if search_domain <> null then search_domain else {},
         _params = if params <> null then params else [],
         View = (optional sd as list, optional p as record) => Table.View(null, Diagnostics.WrapHandlers([
-            GetType = () => Value.Type(GetRows()), // TODO: refactor schema logic
+            GetType = () =>
+                // TODO: refactor schema logic
+                let
+                    newParams = p & [limit=1],
+                    result = Value.Type(Odoo.Search(connection, model, sd, newParams, set_schema))
+                in
+                    result,
             GetRows = () => Odoo.Search(connection, model, sd, p, set_schema),
             OnTake = (count as number) =>
                 let
@@ -309,6 +315,7 @@ Odoo.Search.View = (connection as record, model as text, optional search_domain 
                     newParams = p & [ order = orderBy ]
                 in
                     @View(sd, newParams),
+            // OnGroup: https://community.fabric.microsoft.com/t5/Power-Query/Table-View-Handling-NestedJoin-Expand/td-p/2670026, 
             GetRowCount = () => 
                 let
                     limit = Record.FieldOrDefault(_params, "limit", null),
