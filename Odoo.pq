@@ -316,6 +316,8 @@ Odoo.Search.View = (connection as record, model as text, optional search_domain 
                 in
                     @View(sd, newParams),
             // OnGroup: https://community.fabric.microsoft.com/t5/Power-Query/Table-View-Handling-NestedJoin-Expand/td-p/2670026, 
+            // OnSelectRows: https://github.com/Ihor-UHP/DataConnectors/blob/master/docs/table-view.md
+            // OnInvoke: https://bengribaudo.com/blog/2022/01/04/6398/custom-folding-arbitrary-functions-oninvoke-table-viewfunction
             GetRowCount = () => 
                 let
                     limit = Record.FieldOrDefault(_params, "limit", null),
