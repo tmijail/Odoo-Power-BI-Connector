@@ -308,7 +308,13 @@ Odoo.Search.View = (connection as record, model as text, optional search_domain 
                     orderBy = Text.Combine(sorting, ", "),
                     newParams = p & [ order = orderBy ]
                 in
-                    @View(sd, newParams)
+                    @View(sd, newParams),
+            GetRowCount = () => 
+                let
+                    limit = Record.FieldOrDefault(_params, "limit", null),
+                    result = Odoo.SearchCount(connection, model, _search_domain, limit)
+                in
+                    result
         ]))
     in
         View(_search_domain, _params);
