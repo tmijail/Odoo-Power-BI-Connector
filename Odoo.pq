@@ -316,6 +316,33 @@ Odoo.Search.View = (connection as record, model as text, optional search_domain 
                 in
                     @View(sd, newParams),
             // OnGroup: https://community.fabric.microsoft.com/t5/Power-Query/Table-View-Handling-NestedJoin-Expand/td-p/2670026, 
+            // (keys as { text }, aggregates as {[Name = text, Function = (subtable as table) => any, Type = type]})
+            OnGroup = (keys, aggregates) =>
+                let
+
+                    logKeys = Diagnostics.LogValue("Keys", keys),
+                    logAggregates = Diagnostics.LogValue("Aggregates6", aggregates),
+                    fstAggregateFunc = logAggregates{0}[Function],
+                    logExpression = Diagnostics.LogValue("Value.Expression(Value.Optimize(fstAggregateFunc))", Value.Expression(Value.Optimize(fstAggregateFunc))),
+                    activateLogKeys = if logKeys <> null then true else true,
+                    activateLogAggregates = if logExpression <> null then true else true,
+                    logAggregatesMetadata = Diagnostics.LogValue("Value.Metadata(logAggregates)", Value.Metadata(logAggregates)),
+                    logFstAggregateMetadata = Diagnostics.LogValue("Value.Metadata(logAggregates{0})", Value.Metadata(logAggregates{0})),
+                    logFstAggregateFuncMetadata = Diagnostics.LogValue("Value.Metadata(fstAggregateFunc)", Value.Metadata(fstAggregateFunc)),
+                    activateLogAggregatesMetadata = if logAggregatesMetadata <> null then true else true,
+                    activateLogFstAggregateMetadata = if logFstAggregateMetadata <> null then true else true,
+                    activateLogFstAggregateFuncMetadata = if logFstAggregateFuncMetadata <> null then true else true,
+                    err = error "Can't actually fold this",
+                    result = 
+                        if 
+                            activateLogKeys and 
+                            activateLogAggregates and 
+                            activateLogAggregatesMetadata and 
+                            activateLogFstAggregateMetadata and 
+                            activateLogFstAggregateFuncMetadata 
+                        then err else err
+                in
+                    logAggregates,
             // OnSelectRows: https://github.com/Ihor-UHP/DataConnectors/blob/master/docs/table-view.md
             // OnInvoke: https://bengribaudo.com/blog/2022/01/04/6398/custom-folding-arbitrary-functions-oninvoke-table-viewfunction
             GetRowCount = () => 
@@ -324,7 +351,30 @@ Odoo.Search.View = (connection as record, model as text, optional search_domain 
                     result = Odoo.SearchCount(connection, model, _search_domain, limit)
                 in
                     result
-        ]))
+        ])),
+
+        getFunctionName = (f as function) => Value.Metadata(Value.Type(f))[Documentation.Name],
+        getAggregateDefinition = (aggregate as record) =>
+            let 
+                expression = aggregate[Function][Expression],
+                isAllColumns = if expression = [Kind = "Identifier", Name = "_", IsInclusive = true] then true else false, // when the aggregate function is `each _`
+                isAllColumnsResult = [ 
+                    Name = aggregate[Name],
+                    Function = "_", 
+                    Arguments = {},
+                    Type = aggregate[Type]
+                ],
+                isFunction = expression[Kind] = "Invocation",
+                isFunctionResult = [ 
+                    Name = aggregate[Name],
+                    Function = getFunctionName(expression[Function][Value]), 
+                    Arguments = expression[Arguments],
+                    Type = aggregate[Type]
+                ]
+            in
+                if isAllColumns then isAllColumnsResult else 
+                if isFunction   then isFunctionResult else
+                error "Unsupported aggregation kind."
     in
         View(_search_domain, _params);
     
