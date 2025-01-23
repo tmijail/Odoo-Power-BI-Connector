@@ -356,10 +356,23 @@ Odoo.CheckPermissions = (connection as record, models as list, optional uid as n
         model_names;
 
 
-Odoo.ReadGroup = (connection as record, model as text, search_domain as list, fields as list, groupby as list, optional lazy as logical) =>
+Odoo.ReadGroup = (
+    connection as record, 
+    model as text, 
+    search_domain as list, 
+    fields as list, 
+    groupby as list, 
+    optional offset as nullable number, 
+    optional limit as nullable number, 
+    optional orderby as nullable text, 
+    optional lazy as logical) =>
     let
-        _lazy = if lazy <> null then lazy else false,
-        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "read_group", {search_domain}, [fields=fields, groupby=groupby, lazy=_lazy])),
+        _lazy = if lazy <> null then lazy else false, // Odoo's default value is lazy = True. I don't think it makes sense to do that in PBI.
+        params = [ fields=fields, groupby=groupby, lazy=_lazy ],
+        params2 = if offset  = null then params  else params  & [ offset  = offset  ],
+        params3 = if limit   = null then params2 else params2 & [ limit   = limit   ],
+        params4 = if orderby = null then params3 else params3 & [ orderby = orderby ],
+        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "read_group", {search_domain}, params)),
         without_domain = Table.RemoveColumns(result,{"__domain"})
     in
         without_domain;
@@ -529,7 +542,6 @@ SearchReadType = type function (
         ]}
     ];
 
-
 Odoo.CreateFunctionsNavTable = (connection as record) =>
     let
         searchReadImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
@@ -540,12 +552,25 @@ Odoo.CreateFunctionsNavTable = (connection as record) =>
             Odoo.SearchCount(connection, model, search_domain, limit),
         search_count = Value.ReplaceType(searchCountImpl, SearchCountType),
 
+        read_group = (
+            model as text,
+            search_domain as list, 
+            fields as list, 
+            groupby as list, 
+            optional offset as nullable number, 
+            optional limit as nullable number, 
+            optional orderby as nullable text, 
+            optional lazy as logical 
+        ) => Odoo.ReadGroup(connection, model, search_domain, fields, groupby, offset, limit, orderby, lazy),
+
+
         fun_table =
             #table(
-                { "Function",    "Name",        "Data",      "ItemKind", "IsLeaf"}, 
+                {    "Function"    , "Name"        , "Data"      , "ItemKind", "IsLeaf"  }, 
                 {
-                    {"search_read", "search_read", search_read, "Function", "Function"},
-                    {"search_count", "search_count", search_count, "Function", "Function"}
+                    {"search_read" , "search_read" , search_read , "Function", "Function"},
+                    {"search_count", "search_count", search_count, "Function", "Function"},
+                    {"read_group"  , "read_group"  , read_group  , "Function", "Function"}
                 }
             ),
         navTable = Table.ToNavigationTable(fun_table, {"Function"}, "Name", "Data", "ItemKind", "ItemKind", "IsLeaf")
