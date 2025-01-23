@@ -1,4 +1,4 @@
-[Version = "1.0.0"]
+[Version = "1.2.0"]
 section Odoo;
 
 shared Odoo.TestServer = Json.Document(Text.FromBinary(Extension.Contents("test-server.json")));
@@ -50,12 +50,20 @@ Odoo.Icons = [
  ************************************************/
 
 
-Extension.LoadFunction = (name as text) =>
-    let
-        binary = Extension.Contents(name),
-        asText = Text.FromBinary(binary)
-    in
-        Expression.Evaluate(asText, #shared);
+Extension.LoadFunction = (fileName as text) =>
+  let
+      binary = Extension.Contents(fileName),
+      asText = Text.FromBinary(binary)
+  in
+      try
+        Expression.Evaluate(asText, #shared)
+      catch (e) =>
+        error [
+            Reason = "Extension.LoadFunction Failure",
+            Message.Format = "Loading '#{0}' failed - '#{1}': '#{2}'",
+            Message.Parameters = {fileName, e[Reason], e[Message]},
+            Detail = [File = fileName, Error = e]
+        ];
 
 JsonRpc = Extension.LoadFunction("JsonRpc.pqm");
 JsonRpc.Request = JsonRpc[Request];
@@ -74,6 +82,7 @@ Table.GenerateContainerLeaf = Table[GenerateContainerLeaf];
 Diagnostics = Extension.LoadFunction("Diagnostics.pqm");
 Diagnostics.LogValue = Diagnostics[LogValue];
 Diagnostics.LogFailure = Diagnostics[LogFailure];
+Diagnostics.WrapHandlers = Diagnostics[WrapHandlers];
 
 
 /**********************************************
@@ -99,7 +108,7 @@ Diagnostics.LogFailure = Diagnostics[LogFailure];
 // Finds the uid of the Odoo User and saves all the information needed to connect to the db in the `connection` record.
 Odoo.Login = (url as text, db as text) as record =>
     let
-        uid = Odoo.GetUID(url, db),
+        uid = Diagnostics.LogValue("Logging in as UID", Odoo.GetUID(url, db)),
         connection = [url = url,
                       db = db,
                       uid = uid]
@@ -249,18 +258,76 @@ Odoo.Search = (connection as record, model as text, optional search_domain as li
         
         with_schema = if _set_schema 
                       then Odoo.SetSchema(connection, with_o2m_as_records, schema2) 
-                      else result
+                      else result,
+        
+        reordered_columns = if fields = null
+                            then with_schema
+                            else Table.ReorderColumns(with_schema, fields)
     in
-        with_schema;
+        reordered_columns;
 
 
 // Like Odoo.Search but with query folding
 Odoo.Search.View = (connection as record, model as text, optional search_domain as list, 
                optional params as record, optional set_schema as logical) =>
-    Table.View(null, [
-        GetType = () => Value.Type(GetRows()),
-        GetRows = () => Odoo.Search(connection, model, search_domain, params, set_schema)
-    ]);
+    let
+        _search_domain = if search_domain <> null then search_domain else {},
+        _params = if params <> null then params else [],
+        View = (optional sd as list, optional p as record) => Table.View(null, Diagnostics.WrapHandlers([
+            GetType = () =>
+                // TODO: refactor schema logic
+                let
+                    newParams = p & [limit=1],
+                    result = Value.Type(Odoo.Search(connection, model, sd, newParams, set_schema))
+                in
+                    result,
+            GetRows = () => Odoo.Search(connection, model, sd, p, set_schema),
+            OnTake = (count as number) =>
+                let
+                    currentLimit = Record.FieldOrDefault(p, "limit", false),
+                    newLimit = if currentLimit = false then count else List.Min({currentLimit, count}),
+                    newParams = p & [ limit = newLimit ]
+                in
+                    @View(sd, newParams),
+            OnSkip = (count as number) =>
+                let
+                    newParams = p & [ offset = count ]
+                in
+                    @View(sd, newParams),
+            OnSelectColumns = (columns as list) =>
+                let
+                    newParams = p & [ fields = columns ]
+                in
+                   @View(sd, newParams),
+            OnSort = (order as list) =>
+                let
+                    // This will convert the list of records to a list of text,
+                    // where each entry is "<columnName> <asc|desc>"
+                    sorting = List.Transform(order, (o) => 
+                        let
+                            column = o[Name],
+                            order = o[Order],
+                            orderText = if (order = Order.Ascending) then "asc" else "desc"
+                        in
+                            column & " " & orderText
+                    ),
+                    orderBy = Text.Combine(sorting, ", "),
+                    newParams = p & [ order = orderBy ]
+                in
+                    @View(sd, newParams),
+            // OnGroup: https://community.fabric.microsoft.com/t5/Power-Query/Table-View-Handling-NestedJoin-Expand/td-p/2670026, 
+            // OnSelectRows: https://github.com/Ihor-UHP/DataConnectors/blob/master/docs/table-view.md
+            // OnInvoke: https://bengribaudo.com/blog/2022/01/04/6398/custom-folding-arbitrary-functions-oninvoke-table-viewfunction
+            GetRowCount = () => 
+                let
+                    limit = Record.FieldOrDefault(_params, "limit", null),
+                    result = Odoo.SearchCount(connection, model, _search_domain, limit)
+                in
+                    result
+        ]))
+    in
+        View(_search_domain, _params);
+    
 
 
 /*  Checks whether a user has a certain permission over a list of models.
@@ -289,13 +356,25 @@ Odoo.CheckPermissions = (connection as record, models as list, optional uid as n
         model_names;
 
 
-Odoo.ReadGroup = (connection as record, model as text, search_domain as list, fields as list, groupby as list, optional lazy as logical) =>
+Odoo.ReadGroup = (
+    connection as record, 
+    model as text, 
+    search_domain as list, 
+    fields as list, 
+    groupby as list, 
+    optional offset as nullable number, 
+    optional limit as nullable number, 
+    optional orderby as nullable text, 
+    optional lazy as logical) =>
     let
-        _lazy = if lazy <> null then lazy else false,
-        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "read_group", {search_domain}, [fields=fields, groupby=groupby, lazy=_lazy])),
-        without_domain = Table.RemoveColumns(result,{"__domain"})
+        _lazy = if lazy <> null then lazy else false, // Odoo's default value is lazy = True. I don't think it makes sense to do that in PBI.
+        params = [ fields=fields, groupby=groupby, lazy=_lazy ],
+        params2 = if offset  = null then params  else params  & [ offset  = offset  ],
+        params3 = if limit   = null then params2 else params2 & [ limit   = limit   ],
+        params4 = if orderby = null then params3 else params3 & [ orderby = orderby ],
+        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "read_group", {search_domain}, params))
     in
-        without_domain;
+        result;
 
 
 Odoo.FieldsGet = (connection as record, model as text, optional fields as nullable list, optional attributes as nullable list) as record =>
@@ -360,6 +439,61 @@ Odoo.SetSchema = (connection as record, table as table, schema as table, optiona
     in
         with_schema;
 
+/* Searches for records based on the `search_domain` (https://www.odoo.com/documentation/master/reference/orm.html#reference-orm-domains)
+ * and returns the number it found. Leave the search_domain as an empty list to count all records.
+ *
+ * Example:
+ *     Odoo.SearchCount(connection, "account.invoice", {{"state", "=", "paid"}, {"date", ">", "2019-06-15"}}, 10)
+ */
+Odoo.SearchCount = (connection as record, model as text, optional search_domain as list, 
+               optional limit as nullable number) =>
+    let
+        _search_domain = if search_domain <> null then search_domain else {},
+        params = if limit <> null then [limit = Number.Round(limit, 0, RoundingMode.Down)] else [],
+        result = Odoo.ExecuteKW(
+            connection, 
+            model, 
+            "search_count", 
+            { _search_domain }, 
+            params
+        )
+
+    in
+        result;
+
+SearchCountType = type function (
+    model as (type text meta [
+        Documentation.FieldCaption = "Model",
+        Documentation.FieldDescription = "Technical name of the model to query",
+        Documentation.SampleValues = {"res.partner", "account.invoice"}
+    ]),
+    optional search_domain as (type nullable list meta [
+        Documentation.FieldCaption = "Search domain",
+        Documentation.FieldDescription = "See https://www.odoo.com/documentation/master/reference/orm.html#reference-orm-domains",
+        Documentation.SampleValues = {"{{""name"", ""ilike"", ""dave""}, {""customer"", ""="", true}}", "account.invoice"},
+        Formatting.IsMultiLine = true,
+        Formatting.IsCode = true
+    ]),
+    optional limit as (type nullable number meta [
+        Documentation.FieldCaption = "Limit ",
+        Documentation.FieldDescription = "Maximum number of record to count (upperbound). Defaults to all",
+        Documentation.SampleValues = {"10", "null"},
+        Formatting.IsMultiLine = false,
+        Formatting.IsCode = false
+    ]))
+    as table meta [
+        Documentation.Name = "search_count",
+        Documentation.LongDescription = "Counts the number of records of a given model which satisfy a given search_domain. See https://www.odoo.com/documentation/18.0/developer/reference/backend/orm.html#odoo.models.Model.search_count",
+        Documentation.Examples = {[
+            Description = "Get the number of products we sell.",
+            Code = 
+"search_count(
+    ""product.template"", 
+    { {""sale_ok"", ""="", true} }
+)",
+            Result = "100"
+        ]}
+    ];
 
 SearchReadType = type function (
     model as (type text meta [
@@ -389,7 +523,7 @@ SearchReadType = type function (
     ]))
     as table meta [
         Documentation.Name = "search_read",
-        Documentation.LongDescription = "Queries an Odoo model. See https://www.odoo.com/documentation/master/webservices/odoo.html#search-and-read",
+        Documentation.LongDescription = "Queries an Odoo model. See https://www.odoo.com/documentation/18.0/developer/reference/external_api.html?highlight=search_read#search-and-read",
         Documentation.Examples = {[
             Description = "Get the names and emails of our contacts at Azure Interior.",
             Code = 
@@ -407,16 +541,36 @@ SearchReadType = type function (
         ]}
     ];
 
-
 Odoo.CreateFunctionsNavTable = (connection as record) =>
     let
-        customQueryImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
+        searchReadImpl = (model as text, optional search_domain as nullable list, optional params as nullable record, optional set_schema as logical) =>
             Odoo.Search.View(connection, model, search_domain, params, set_schema),
-        search_read = Value.ReplaceType(customQueryImpl, SearchReadType),
+        search_read = Value.ReplaceType(searchReadImpl, SearchReadType),
+        
+        searchCountImpl = (model as text, optional search_domain as nullable list, optional limit as nullable number) =>
+            Odoo.SearchCount(connection, model, search_domain, limit),
+        search_count = Value.ReplaceType(searchCountImpl, SearchCountType),
+
+        read_group = (
+            model as text,
+            search_domain as list, 
+            fields as list, 
+            groupby as list, 
+            optional offset as nullable number, 
+            optional limit as nullable number, 
+            optional orderby as nullable text, 
+            optional lazy as logical 
+        ) => Odoo.ReadGroup(connection, model, search_domain, fields, groupby, offset, limit, orderby, lazy),
+
+
         fun_table =
             #table(
-                { "Function",    "Name",        "Data",      "ItemKind", "IsLeaf"}, 
-                {{"search_read", "search_read", search_read, "Function", "Function"}}
+                {    "Function"    , "Name"        , "Data"      , "ItemKind", "IsLeaf"  }, 
+                {
+                    {"search_read" , "search_read" , search_read , "Function", "Function"},
+                    {"search_count", "search_count", search_count, "Function", "Function"},
+                    {"read_group"  , "read_group"  , read_group  , "Function", "Function"}
+                }
             ),
         navTable = Table.ToNavigationTable(fun_table, {"Function"}, "Name", "Data", "ItemKind", "ItemKind", "IsLeaf")
     in
