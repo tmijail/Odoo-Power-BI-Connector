@@ -93,7 +93,7 @@ search_read(
 3. Clone this repository and open it in VS Code
 5. Compile and install (*Terminal > Run Task > Build and copy to Customs Connectors folder / Ctrl+Shift+B*)
 
-Alternativelly, you can just compress the repository to a `.zip` file and then change the extension to `.mez`.
+Alternatively, you can just compress the repository to a `.zip` file and then change the extension to `.mez`.
 
 ### Test
 By default the unit tests assume there's a non-empty Odoo instance running at http://localhost:8069 with a database named `db`. A `docker-compose.yml` file is provided to easily set up such an instance. Just execute `docker-compose up`, wait a bit, go to http://localhost:8069 and set up the database with sample data. If you want to use some other server for the tests, edit `test-server.json`.
