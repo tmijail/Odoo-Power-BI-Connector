@@ -372,10 +372,9 @@ Odoo.ReadGroup = (
         params2 = if offset  = null then params  else params  & [ offset  = offset  ],
         params3 = if limit   = null then params2 else params2 & [ limit   = limit   ],
         params4 = if orderby = null then params3 else params3 & [ orderby = orderby ],
-        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "read_group", {search_domain}, params)),
-        without_domain = Table.RemoveColumns(result,{"__domain"})
+        result = Table.FromRecords(Odoo.ExecuteKW(connection, model, "read_group", {search_domain}, params))
     in
-        without_domain;
+        result;
 
 
 Odoo.FieldsGet = (connection as record, model as text, optional fields as nullable list, optional attributes as nullable list) as record =>
