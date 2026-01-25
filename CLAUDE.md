@@ -13,22 +13,51 @@ This is a Power Query custom data connector that enables Microsoft Power BI to q
 Build and deploy via VS Code:
 - **Ctrl+Shift+B** or `Terminal > Run Task > "Build and copy to Customs Connectors folder"`
 
+Or via command line:
+```bash
+dotnet build Odoo.proj
+```
+
 This compiles to `bin\AnyCPU\Debug\Odoo.mez` and copies it to the Power BI custom connectors folder.
 
 ## Testing
 
+### Prerequisites
+
 Start the test Odoo instance:
 ```bash
-docker-compose up
+docker-compose up -d
 ```
 
-Then in VS Code:
+Test configuration is in `test-server.json` (default: `http://localhost:8069`, database `db`).
+
+### CLI Testing with PQTest (Recommended)
+
+The Power Query SDK includes **PQTest.exe** for command-line testing. Find it in the VS Code extension or install via NuGet:
+
+```bash
+nuget install Microsoft.PowerQuery.SdkTools -OutputDirectory ./tools
+```
+
+**Set credentials** (once per environment):
+```bash
+echo '{"AuthenticationKind":"UsernamePassword","AuthenticationProperties":{"Username":"admin","Password":"admin"},"PrivacySetting":"None","Permissions":[]}' | \
+  PQTest.exe set-credential -e bin/AnyCPU/Debug/Odoo.mez -q Odoo.query.pq
+```
+
+**Run tests**:
+```bash
+PQTest.exe compare -e bin/AnyCPU/Debug/Odoo.mez -q Odoo.query.pq -p
+```
+
+See `thoughts/cli-testing-approach.md` for detailed CLI usage and CI/CD integration.
+
+### VS Code Testing
+
 1. Open Power Query SDK sidebar, click "Set credential"
 2. Enter test database credentials
 3. Open `Odoo.query.pq`
 4. Click "Evaluate current file"
-
-Test configuration is in `test-server.json` (default: `http://localhost:8069`, database `db`).
 
 ## Architecture
 
