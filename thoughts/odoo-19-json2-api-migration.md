@@ -135,6 +135,11 @@ The method result is returned directly without JSON-RPC envelope.
 | `GET /web/version` | `common.version` method |
 | `GET /doc` | N/A (new - auto-generated API docs) |
 
+> **Important**: The `/web/version` endpoint (Odoo 19+) returns different field names than
+> the legacy `common.version` JSON-RPC method:
+> - Odoo 19+: `{"version": "19.0", "version_info": [19, 0, 0, "final", 0, ""]}`
+> - Legacy: `{"server_version": "...", "server_version_info": [...], "server_serie": "...", "protocol_version": 1}`
+
 ---
 
 ## Migration Impact on This Connector

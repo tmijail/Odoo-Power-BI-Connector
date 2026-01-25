@@ -3,6 +3,8 @@
 This document outlines a test-driven development plan for adding Odoo 19+ JSON-2 API support while maintaining backward compatibility with JSON-RPC for legacy versions.
 
 > **Related documentation**: See [odoo-19-json2-api-migration.md](./odoo-19-json2-api-migration.md) for details on the API deprecation timeline, JSON-2 request/response format, and authentication differences.
+>
+> **Validation**: This plan has been validated against the Odoo 19.0 source code. See [json2-validation-report.md](./json2-validation-report.md) for detailed findings.
 
 ## Overview
 
@@ -31,7 +33,9 @@ This document outlines a test-driven development plan for adding Odoo 19+ JSON-2
 Fact(
     "Check that we can detect Odoo version",
     try true,
-    try Odoo.GetVersion(url)[server_version_info]{0} >= 14
+    // Note: Odoo 19+ uses "version_info", legacy uses "server_version_info"
+    // Odoo.GetMajorVersion handles both cases
+    try Odoo.GetMajorVersion(url) >= 14
 )
 ```
 
@@ -47,12 +51,13 @@ Version detection requires two strategies because the endpoints differ between O
 #### `/web/version` response (Odoo 19+):
 ```json
 {
-  "server_version": "19.0",
-  "server_version_info": [19, 0, 0, "final", 0, ""],
-  "server_serie": "19.0",
-  "protocol_version": 1
+  "version": "19.0",
+  "version_info": [19, 0, 0, "final", 0, ""]
 }
 ```
+
+> **Note**: The Odoo 19 `/web/version` endpoint uses different field names than the legacy
+> `common.version` JSON-RPC call. The implementation must handle both formats.
 
 #### `common.version` response (Odoo ≤18):
 ```json
@@ -95,8 +100,17 @@ Odoo.GetVersion = (url as text) as record =>
         result;
 
 // Helper to extract major version number
+// Handles both Odoo 19+ format ("version_info") and legacy format ("server_version_info")
 Odoo.GetMajorVersion = (url as text) as number =>
-    Odoo.GetVersion(url)[server_version_info]{0};
+    let
+        version = Odoo.GetVersion(url),
+        // Odoo 19+ uses "version_info", legacy uses "server_version_info"
+        versionInfo = if Record.HasFields(version, "version_info") then
+            version[version_info]
+        else
+            version[server_version_info]
+    in
+        versionInfo{0};
 ```
 
 ### 1.3 Test: Version Detection Fallback
@@ -108,10 +122,11 @@ Fact(
     try
         let
             version = Odoo.GetVersion(url),
-            hasServerVersion = Record.HasFields(version, "server_version"),
-            hasVersionInfo = Record.HasFields(version, "server_version_info")
+            // Odoo 19+ uses "version"/"version_info", legacy uses "server_version"/"server_version_info"
+            hasVersion = Record.HasFields(version, "version") or Record.HasFields(version, "server_version"),
+            hasVersionInfo = Record.HasFields(version, "version_info") or Record.HasFields(version, "server_version_info")
         in
-            hasServerVersion and hasVersionInfo
+            hasVersion and hasVersionInfo
 )
 ```
 
@@ -165,7 +180,7 @@ let
         let
             endpoint = Json2.BuildUrl(url, model, method),
             headers = [
-                #"Authorization" = "bearer " & apiKey,
+                #"Authorization" = "Bearer " & apiKey,  // RFC 6750 standard: "Bearer" with capital B
                 #"Content-Type" = "application/json",
                 #"X-Odoo-Database" = db
             ],
@@ -173,7 +188,8 @@ let
             response = Web.Contents(endpoint, [
                 Content = content,
                 Headers = headers,
-                ManualStatusHandling = {400, 401, 403, 404, 500}
+                // Handle all documented HTTP status codes
+                ManualStatusHandling = {400, 401, 403, 404, 409, 415, 422, 500}
             ]),
             metadata = Value.Metadata(response),
             statusCode = metadata[Response.Status],
@@ -440,7 +456,7 @@ Fact(
 ```powerquery
 Fact(
     "Check JSON-2 errors are properly formatted",
-    try "odoo.exceptions.AccessError",
+    try "werkzeug.exceptions.NotFound",  // Model not found returns NotFound
     try
         let
             result = try Odoo.Execute(connection, "nonexistent.model", "search_read", [])
@@ -449,7 +465,45 @@ Fact(
 )
 ```
 
-### 7.2 Implementation: Unified Error Format
+### 7.2 JSON-2 Error Response Format
+
+The JSON-2 API returns errors with these fields:
+```json
+{
+  "name": "module.ExceptionClass",
+  "message": "Human-readable error message",
+  "arguments": ["array", "of", "exception", "args"],
+  "context": {},
+  "debug": "Full traceback (only in debug mode)"
+}
+```
+
+### 7.3 HTTP Status Codes
+
+| Status | Condition | Error Name |
+|--------|-----------|------------|
+| 200 | Success | - |
+| 400 | Invalid JSON body | `werkzeug.exceptions.BadRequest` |
+| 401 | Missing/invalid Bearer token | `werkzeug.exceptions.Unauthorized` |
+| 403 | Access denied | `odoo.exceptions.AccessError` or `AccessDenied` |
+| 404 | Model/method not found | `werkzeug.exceptions.NotFound` |
+| 409 | Lock conflict | `odoo.exceptions.LockError` |
+| 415 | Wrong Content-Type | `werkzeug.exceptions.UnsupportedMediaType` |
+| 422 | Missing arguments, validation error | `werkzeug.exceptions.UnprocessableEntity` or `odoo.exceptions.UserError` |
+| 500 | Unhandled exception | Various |
+
+### 7.4 Common Error Messages
+
+| Scenario | Message |
+|----------|---------|
+| Missing auth | "User not authenticated, use an API Key with a Bearer Authorization header." |
+| Invalid API key | "Invalid apikey" |
+| Model not found | "the model '{model}' does not exist" |
+| Method not found | "{model} has no method {method}" |
+| Missing argument | "missing a required argument: '{arg}'" |
+| Access denied | "You are not allowed to access '{model_name}' ({model}) records..." |
+
+### 7.5 Implementation: Unified Error Format
 
 Both APIs should produce consistent error records:
 ```powerquery
