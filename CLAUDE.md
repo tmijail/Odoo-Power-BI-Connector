@@ -119,3 +119,16 @@ search_read(model, domain, params)
 ## Important: Odoo 19 API Deprecation
 
 The JSON-RPC API (`/jsonrpc`) used by this connector is **deprecated in Odoo 19** and will be removed in Odoo 20 (Fall 2026). The replacement is the JSON-2 API with different authentication (API keys) and request format. See `thoughts/odoo-19-json2-api-migration.md` for migration details and `thoughts/json2-implementation-plan.md` for the TDD implementation plan.
+
+## Reference Documentation
+
+**Power Query SDK docs**: https://github.com/MicrosoftDocs/powerquery-docs (`powerquery-docs/` subdirectory)
+
+<!-- thoughts: Key references for connector development:
+- `samples/trippin/` - Progressive tutorial building a REST connector (10 parts)
+  - Part 10 (`10-tableview1/`) has complete Table.View query folding implementation
+  - Helper functions: `table.generatebypage.pqm`, `table.tonavigationtable.pqm`, `table.changetype.pqm`
+- `helper-functions.md` - Table.ToNavigationTable, Table.GenerateByPage, SchemaTransformTable
+- `handling-navigation-tables.md` - Nav table metadata and ItemKind values
+- Query folding maps M transforms to API parameters via Table.View handlers (OnTake→$top, OnSkip→$skip, etc.)
+-->
