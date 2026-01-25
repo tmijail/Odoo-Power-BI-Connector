@@ -86,3 +86,7 @@ search_read(model, domain, params)
 **many2one conversion**: Odoo returns `[id, name]` pairs, converted to `{id, name}` records.
 
 **Permission filtering**: one2many fields are filtered based on user access rights to related models.
+
+## Important: Odoo 19 API Deprecation
+
+The JSON-RPC API (`/jsonrpc`) used by this connector is **deprecated in Odoo 19** and will be removed in Odoo 20 (Fall 2026). The replacement is the JSON-2 API with different authentication (API keys) and request format. See `thoughts/odoo-19-json2-api-migration.md` for migration details.
