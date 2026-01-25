@@ -2,6 +2,8 @@
 
 This document outlines a test-driven development plan for adding Odoo 19+ JSON-2 API support while maintaining backward compatibility with JSON-RPC for legacy versions.
 
+> **Related documentation**: See [odoo-19-json2-api-migration.md](./odoo-19-json2-api-migration.md) for details on the API deprecation timeline, JSON-2 request/response format, and authentication differences.
+
 ## Overview
 
 ### Goals
@@ -33,9 +35,16 @@ Fact(
 )
 ```
 
-### 1.2 Implementation: Version Endpoint
+### 1.2 Implementation: Version Endpoint with Fallback
 
-The `/web/version` endpoint works on all Odoo versions (no auth required) and returns:
+Version detection requires two strategies because the endpoints differ between Odoo versions:
+
+1. **Odoo 19+**: The `/web/version` endpoint returns version info directly (no auth required)
+2. **Odoo ≤18**: The `/web/version` endpoint doesn't exist; use `common.version` via JSON-RPC
+
+**Strategy**: Try `/web/version` first. If it fails (404 or error), fall back to JSON-RPC `common.version`.
+
+#### `/web/version` response (Odoo 19+):
 ```json
 {
   "server_version": "19.0",
@@ -45,20 +54,65 @@ The `/web/version` endpoint works on all Odoo versions (no auth required) and re
 }
 ```
 
+#### `common.version` response (Odoo ≤18):
+```json
+{
+  "server_version": "16.0",
+  "server_version_info": [16, 0, 0, "final", 0, ""],
+  "server_serie": "16.0",
+  "protocol_version": 1
+}
+```
+
 ```powerquery
-// Odoo.pq - Add function
+// Odoo.pq - Add function with fallback logic
 Odoo.GetVersion = (url as text) as record =>
     let
-        versionUrl = Uri.Combine(url, "web/version"),
-        response = Web.Contents(versionUrl, [
-            Headers = [#"Content-Type" = "application/json"]
-        ])
+        // First, try the new /web/version endpoint (Odoo 19+)
+        webVersionResult = try
+            let
+                versionUrl = Uri.Combine(url, "web/version"),
+                response = Web.Contents(versionUrl, [
+                    Headers = [#"Content-Type" = "application/json"],
+                    ManualStatusHandling = {404}
+                ]),
+                metadata = Value.Metadata(response),
+                statusCode = metadata[Response.Status]
+            in
+                if statusCode = 404 then
+                    null
+                else
+                    Json.Document(response)
+        otherwise
+            null,
+
+        // If /web/version failed, fall back to JSON-RPC common.version (Odoo ≤18)
+        result = if webVersionResult <> null then
+            webVersionResult
+        else
+            JsonRpc.Call(url, "common", "version", {})
     in
-        Json.Document(response);
+        result;
 
 // Helper to extract major version number
 Odoo.GetMajorVersion = (url as text) as number =>
     Odoo.GetVersion(url)[server_version_info]{0};
+```
+
+### 1.3 Test: Version Detection Fallback
+```powerquery
+// Test that version detection works on both old and new Odoo versions
+Fact(
+    "Check version detection returns valid version info",
+    try true,
+    try
+        let
+            version = Odoo.GetVersion(url),
+            hasServerVersion = Record.HasFields(version, "server_version"),
+            hasVersionInfo = Record.HasFields(version, "server_version_info")
+        in
+            hasServerVersion and hasVersionInfo
+)
 ```
 
 ### 1.3 Test: Version Comparison Logic
@@ -504,7 +558,8 @@ Update `test-server.json` to support both API types:
 
 | Risk | Mitigation |
 |------|------------|
-| `/web/version` blocked by auth | This endpoint is public; test confirms it works |
+| `/web/version` doesn't exist on Odoo ≤18 | Fall back to `common.version` via JSON-RPC (see Phase 1.2) |
+| `/web/version` blocked by auth | This endpoint is public on Odoo 19+; fallback handles older versions |
 | API key not available on all Odoo plans | Fall back to JSON-RPC with password auth |
 | Breaking changes for existing users | API version auto-detection ensures transparent upgrade |
 | Odoo 19 not yet widely deployed | Default to JSON-RPC unless version ≥19 detected |
