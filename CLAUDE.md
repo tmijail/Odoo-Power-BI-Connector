@@ -132,3 +132,38 @@ The JSON-RPC API (`/jsonrpc`) used by this connector is **deprecated in Odoo 19*
 - `handling-navigation-tables.md` - Nav table metadata and ItemKind values
 - Query folding maps M transforms to API parameters via Table.View handlers (OnTake→$top, OnSkip→$skip, etc.)
 -->
+
+## Skills
+
+### SDK Best Practices Review
+
+When reviewing or modifying connector code, check against these Power Query SDK patterns:
+
+**Table.View (Query Folding)**
+- [ ] `GetType` returns cached schema type, never fetches data
+- [ ] `GetRows` is the only handler that makes HTTP requests
+- [ ] State accumulated via recursive `@View(newState)` calls
+- [ ] `Diagnostics.WrapHandlers` wraps handler record for error tracing
+- [ ] Unimplemented handlers return `...` to fall back to local processing
+
+**Schema Handling**
+- [ ] Schema cached in state or connection, not re-fetched per call
+- [ ] `Value.ReplaceType` sets table type to avoid Power Query type inference
+- [ ] `SchemaTransformTable` or `Table.ChangeType` enforces column types
+
+**Navigation Tables**
+- [ ] `Table.ToNavigationTable` adds required metadata fields
+- [ ] `IsLeaf=false` for expandable nodes, `true` for data tables
+- [ ] `ItemKind` matches content type (Table, Function, Database, etc.)
+
+**Authentication**
+- [ ] `TestConnection` handler enables Gateway refresh support
+- [ ] Credentials accessed via `Extension.CurrentCredential()`
+- [ ] Auth errors surface clearly to user
+
+**Performance**
+- [ ] Avoid eager evaluation in nav tables (prefer `Table.InsertRows` over `Table.FromRecords` for lazy eval)
+- [ ] Pagination uses `Table.GenerateByPage` pattern
+- [ ] No duplicate HTTP requests during preview/type inference
+
+See `thoughts/json2-sdk-review.md` for detailed analysis of this codebase against these patterns.
